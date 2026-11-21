@@ -71,7 +71,7 @@ const uid = () => S.session?.user?.id;
 const greetName = () => S.profile?.name_vocative || S.profile?.name || "poligloto";
 function loadLocal(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch { return d; } }
 function saveLocal(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} }
-function toast(t) { const d = document.createElement("div"); d.className = "toast"; d.textContent = t; $("#app").appendChild(d); setTimeout(() => d.remove(), 3200); }
+function toast(t, ms = 4500) { document.querySelectorAll(".toast").forEach(x => x.remove()); const d = document.createElement("div"); d.className = "toast"; d.setAttribute("role", "alert"); d.textContent = t; document.body.appendChild(d); setTimeout(() => d.remove(), ms); }
 function norm(s) { return String(s).toLowerCase().replace(/ß/g, "ss").replace(/[.,!?;:„”"'¡¿«»]/g, "").replace(/\s+/g, " ").trim(); }
 function lev(a, b) { const m = [...Array(b.length + 1).keys()]; for (let i = 1; i <= a.length; i++) { let p = m[0]; m[0] = i; for (let j = 1; j <= b.length; j++) { const t = m[j]; m[j] = Math.min(m[j] + 1, m[j - 1] + 1, p + (a[i - 1] === b[j - 1] ? 0 : 1)); p = t; } } return m[b.length]; }
 
@@ -201,7 +201,7 @@ function renderAuth() {
     <div class="logo big" style="position:relative">STAYSI</div>
     <h2 style="position:relative">${reg ? "Załóż konto" : "Zaloguj się"}</h2>
     <form id="authForm" style="display:flex;flex-direction:column;gap:12px;position:relative">
-      <label class="f">E-mail<input class="field" type="email" id="email" autocomplete="email" required></label>
+      <label class="f">E-mail<input class="field" type="email" id="email" autocomplete="email" value="${esc(S.auth.email || "")}" required></label>
       <label class="f">Hasło<input class="field" type="password" id="pass" autocomplete="${reg ? "new-password" : "current-password"}" minlength="8" required></label>
       ${S.auth.msg ? `<p class="small" style="background:rgba(255,255,255,.12);padding:12px;border-radius:14px">${esc(S.auth.msg)}</p>` : ""}
       <button class="btn btn-sun" type="submit">${reg ? "Załóż konto" : "Zaloguj"}</button>
@@ -248,8 +248,9 @@ function renderOb() {
     <div class="chips">${INTERESTS.map(i => `<button class="chip ${(P.interests || []).includes(i) ? "sel" : ""}" data-act="interest" data-k="${esc(i)}">${esc(i)}</button>`).join("")}
     ${(P.interests || []).filter(i => !INTERESTS.includes(i)).map(i => `<button class="chip sel" data-act="interest" data-k="${esc(i)}">${esc(i)}</button>`).join("")}</div>
     <div class="answer"><label class="f" style="flex:1">Coś własnego?<input class="field" type="text" id="ownInt" placeholder="np. astronomia"></label><button class="pillbtn" style="background:#fff;color:var(--indigo);height:52px" data-act="addInterest">Dodaj</button></div>`, "Dalej");
-  if (st === 7) return obShell(`<h2>Po co się uczysz?</h2>
-    <div class="opts">${GOALS.map(g => `<button class="opt ${P.goal === g ? "sel" : ""}" data-act="goal" data-k="${esc(g)}">${esc(g)}</button>`).join("")}</div>`, "Dalej");
+  if (st === 7) { const goals = goalList(); return obShell(`<h2>Po co się uczysz?</h2><p class="soft">Możesz wybrać kilka i dopisać własny cel.</p>
+    <div class="chips">${[...new Set([...GOALS, ...goals])].map(g => `<button class="chip ${goals.includes(g) ? "sel" : ""}" data-act="goal" data-k="${esc(g)}">${esc(g)}</button>`).join("")}</div>
+    <div class="answer"><label class="f" style="flex:1">Własny cel<input class="field" type="text" id="ownGoal" placeholder="np. egzamin, rozmowa o pracę"></label><button class="pillbtn" style="background:#fff;color:var(--indigo);height:52px" data-act="addGoal">Dodaj</button></div>`, "Dalej"); }
   if (st === 8) return obShell(`<h2>Których języków chcesz się uczyć?</h2><p class="soft">Możesz wybrać kilka.</p>
     <div class="opts">${Object.entries(LANGS).filter(([k]) => k !== P.native).map(([k, v]) => `<button class="opt ${S.ob.sel.includes(k) ? "sel" : ""}" data-act="pick" data-k="${k}"><b style="font-family:var(--display);font-size:22px">${v.hi}</b>${v.name}</button>`).join("")}</div>`, "Dalej");
   if (st === 9) return obShell(`<h2>${esc(greetName())}, twój plan</h2>
@@ -313,6 +314,8 @@ function renderHome() {
   <div class="grow"></div>
   <p class="quote soft">„${esc(q.t)}” <b style="color:#fff">${esc(q.a)}</b></p>`;
 }
+const goalList = () => String(S.profile?.goal || "").split(",").map(s => s.trim()).filter(Boolean);
+const setGoals = list => { S.profile.goal = list.join(", "); };
 const todayDone = lang => !!S.doneDays[day(0)]?.has(lang);
 
 function renderBank() {
@@ -360,7 +363,7 @@ function renderMe() {
     <label class="f">Gdzie mieszkasz?<input class="field" type="text" id="meCity" value="${esc(P.city)}"></label>
     <label class="f">Coś o tobie<textarea class="field" id="meAbout">${esc(P.about)}</textarea></label>
     <div><p class="small" style="font-weight:700;margin-bottom:6px">Zainteresowania</p><div class="chips">${[...new Set([...INTERESTS, ...(P.interests || [])])].map(i => `<button class="chip ${(P.interests || []).includes(i) ? "sel" : ""}" data-act="interest" data-k="${esc(i)}">${esc(i)}</button>`).join("")}</div></div>
-    <label class="f">Cel nauki<select class="field" id="meGoal">${GOALS.map(g => `<option ${P.goal === g ? "selected" : ""}>${esc(g)}</option>`).join("")}</select></label>
+    <div><p class="small" style="font-weight:700;margin-bottom:6px">Cel nauki</p><div class="chips">${[...new Set([...GOALS, ...goalList()])].map(g => `<button class="chip ${goalList().includes(g) ? "sel" : ""}" data-act="goal" data-k="${esc(g)}">${esc(g)}</button>`).join("")}</div></div>
     <label class="f">Język ojczysty<select class="field" id="meNative">${Object.entries(LANGS).map(([k, v]) => `<option value="${k}" ${P.native === k ? "selected" : ""}>${v.name}</option>`).join("")}</select></label>
     <button class="btn btn-indigo" data-act="saveMe" style="font-size:16px;padding:13px">Zapisz zmiany</button>
   </div>
@@ -546,16 +549,20 @@ document.addEventListener("keydown", e => {
 async function onAuth(e) {
   e.preventDefault();
   const email = $("#email").value.trim(), password = $("#pass").value;
-  await withBusy(S.auth.mode === "register" ? "Zakładam konto…" : "Loguję…", async () => {
+  S.auth.email = email;
+  S.busy = S.auth.mode === "register" ? "Zakładam konto…" : "Loguję…"; render();
+  try {
     if (S.auth.mode === "register") {
       const { data, error } = await sb.auth.signUp({ email, password, options: { emailRedirectTo: location.origin } });
-      if (error) throw new Error(error.message);
-      if (!data.session) { S.auth = { mode: "login", msg: "Sprawdź skrzynkę i kliknij link potwierdzający. Potem zaloguj się tutaj." }; }
+      if (error) throw new Error(error.message.includes("Signups not allowed") || error.message.includes("signup") ? "Rejestracja jest zamknięta." : error.message);
+      if (!data.session) { S.auth = { mode: "login", email, msg: "Sprawdź skrzynkę i kliknij link potwierdzający. Potem zaloguj się tutaj." }; }
     } else {
       const { error } = await sb.auth.signInWithPassword({ email, password });
-      if (error) throw new Error(error.message.includes("Invalid") ? "Zły e-mail albo hasło." : error.message.includes("confirm") ? "Najpierw potwierdź e-mail linkiem ze skrzynki." : error.message);
+      if (error) throw new Error(error.message.includes("Invalid") ? "Zły e-mail albo hasło." : error.message.includes("confirm") ? "Najpierw potwierdź e-mail linkiem ze skrzynki." : error.message.includes("Signups not allowed") || error.message.includes("signup") ? "Rejestracja jest zamknięta." : error.message);
     }
-  });
+  } catch (err) {
+    S.auth.msg = err.message || "Nie udało się. Spróbuj ponownie.";
+  } finally { S.busy = null; render(); }
 }
 
 function startPlacement(lang, after) {
@@ -584,7 +591,8 @@ async function act(a, k, el) {
     case "native": P.native = k; S.ob.sel = S.ob.sel.filter(x => x !== k); return render();
     case "interest": { const list = P.interests || []; P.interests = list.includes(k) ? list.filter(x => x !== k) : [...list, k]; if (S.view === "me") return render(); return render(); }
     case "addInterest": { const v = $("#ownInt").value.trim(); if (v && !(P.interests || []).includes(v)) P.interests = [...(P.interests || []), v]; return render(); }
-    case "goal": P.goal = k; return render();
+    case "goal": { const g = goalList(); setGoals(g.includes(k) ? g.filter(x => x !== k) : [...g, k]); return render(); }
+    case "addGoal": { const v = $("#ownGoal").value.trim(); if (v && !goalList().includes(v)) setGoals([...goalList(), v]); return render(); }
     case "pick": S.ob.sel = S.ob.sel.includes(k) ? S.ob.sel.filter(x => x !== k) : [...S.ob.sel, k]; return render();
 
     /* test poziomu */
@@ -604,7 +612,7 @@ async function act(a, k, el) {
     case "saveBudget": { const v = parseFloat(($("#budget").value || "").replace(",", ".")); if (!(v > 0)) return toast("Wpisz kwotę większą od zera."); await saveProfile({ budget_usd: v }); toast("Limit zapisany."); return render(); }
     case "saveMe": {
       const name = $("#meName").value.trim() || P.name;
-      const fields = { name, job: $("#meJob").value, city: $("#meCity").value, about: $("#meAbout").value, interests: P.interests || [], goal: $("#meGoal").value, native: $("#meNative").value, remind_at: $("#remAt").value };
+      const fields = { name, job: $("#meJob").value, city: $("#meCity").value, about: $("#meAbout").value, interests: P.interests || [], goal: P.goal || "", native: $("#meNative").value, remind_at: $("#remAt").value };
       if (name !== P.name || fields.native !== P.native) fields.name_vocative = await vocative(name, fields.native);
       await saveProfile(fields); toast("Zapisano."); return render();
     }
@@ -651,7 +659,7 @@ async function obNext() {
   if (st === 4) { const n = $("#name").value.trim(); if (!n) return toast("Wpisz swoje imię."); P.name = n; }
   if (st === 5) { P.job = $("#job").value; P.city = $("#city").value; P.about = $("#about").value; }
   if (st === 7) {
-    if (!P.goal) return toast("Wybierz cel nauki.");
+    if (!goalList().length) return toast("Wybierz co najmniej jeden cel.");
     await withBusy("Zapisuję twój profil…", async () => {
       const name_vocative = await vocative(P.name, P.native);
       await saveProfile({ name: P.name, name_vocative, native: P.native, job: P.job, city: P.city, about: P.about, interests: P.interests || [], goal: P.goal });
