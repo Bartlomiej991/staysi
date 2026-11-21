@@ -1,0 +1,10 @@
+# Sekrety: nigdy na GitHuba
+.env
+.env.*
+!.env.example
+
+# Zależności i pliki systemowe
+node_modules/
+.vercel/
+.DS_Store
+Thumbs.db
