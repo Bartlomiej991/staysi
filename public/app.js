@@ -368,7 +368,7 @@ function renderCost() {
   const today = all.filter(c => new Date(c.created_at).toLocaleDateString("sv-SE") === day(0)).reduce((a, c) => a + Number(c.cost_usd), 0);
   const lessons = all.filter(c => c.purpose === "lesson").length;
   const avg = lessons ? total / lessons : 0;
-  const models = {}; all.forEach(c => { const m = c.model.includes("sonnet") ? "Claude Sonnet 5.5" : "Claude Haiku 5.5"; models[m] = models[m] || { n: 0, v: 0, t: 0 }; models[m].n++; models[m].v += Number(c.cost_usd); models[m].t += c.input_tokens + c.output_tokens; });
+  const models = {}; all.forEach(c => { const m = c.model.includes("opus") ? "Claude Opus 5.5" : c.model.includes("sonnet") ? "Claude Sonnet 5.5" : "Claude Haiku 5.5"; models[m] = models[m] || { n: 0, v: 0, t: 0 }; models[m].n++; models[m].v += Number(c.cost_usd); models[m].t += c.input_tokens + c.output_tokens; });
   const langs = Object.keys(S.langs).map(k => ({ k, v: all.filter(c => c.lang === k).reduce((a, c) => a + Number(c.cost_usd), 0), n: all.filter(c => c.lang === k && c.purpose === "lesson").length }));
   const maxL = Math.max(0.000001, ...langs.map(l => l.v));
   const month = new Date().toLocaleDateString("pl-PL", { month: "long" });
