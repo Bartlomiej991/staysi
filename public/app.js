@@ -495,7 +495,7 @@ function chunked(line) {
   return html;
 }
 function matSteps(L) {
-  const isC = L.C.mode === "C", reading = isC ? 2 : 3, gram = (L.C.grammar || []).length ? reading : -1;
+  const isC = L.C.mode === "C", reading = isC ? 2 : 3, gram = ((L.C.grammar || []).length || (L.C.contrasts || []).length) ? reading : -1;
   return { gram, baro: gram >= 0 ? gram + 1 : reading };
 }
 const backBtn = (act, color = "#fff") => `<button class="btn btn-ghost" style="color:${color}" data-act="${act}">Wstecz</button>`;

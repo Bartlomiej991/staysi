@@ -76,6 +76,7 @@ test("pierwsza lekcja: bez powtórki, gramatyka, barometr, mówienie", async () 
   assert.equal(db.bank.length, 1);
   await click('[data-act="matNext"]'); await click('[data-act="matNext"]');
   assert.match(text(), /JAK TO JEST ZBUDOWANE/); assert.match(text(), /Czasownik na 2\. miejscu/);
+  assert.match(text(), /My mówimy tak, a po niemiecku/); assert.match(text(), /Dlaczego\? Niemcy grzecznie zamawiają/, "porównanie PL i DE z wyjaśnieniem");
   await sleep(20);
   assert.equal(db.grammar.length, 1, "wzór zapisany w Mojej gramatyce");
   await click('[data-act="matBack"]'); assert.match(text(), /SŁUCHANIE/);
