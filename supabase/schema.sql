@@ -134,3 +134,42 @@ end; $$;
 drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created after insert on auth.users
   for each row execute function public.handle_new_user();
+
+alter table public.bank
+  add column if not exists pron text not null default '',
+  add column if not exists ex text not null default '',
+  add column if not exists ex_pl text not null default '',
+  add column if not exists tip text not null default '',
+  add column if not exists fam jsonb,
+  add column if not exists introduced boolean not null default true;
+
+-- Słówka dodane ręcznie mają introduced = false, dopóki nie przejdziesz ich w lekcji słówek.
+create index if not exists bank_new_idx on public.bank (user_id, lang, introduced);
+
+-- Moja gramatyka (to samo co 003_gramatyka.sql)
+create table if not exists public.grammar (
+  id bigint generated always as identity primary key,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  lang text not null,
+  title text not null,
+  category text not null default 'other',
+  rule text not null default '',
+  examples jsonb not null default '[]'::jsonb,
+  seen int not null default 1,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (user_id, lang, title)
+);
+alter table public.grammar enable row level security;
+drop policy if exists "own grammar" on public.grammar;
+create policy "own grammar" on public.grammar for all to authenticated
+  using (user_id = auth.uid()) with check (user_id = auth.uid());
+grant select, insert, update, delete on public.grammar to authenticated;
+grant all on public.grammar to service_role;
+grant usage, select on all sequences in schema public to authenticated, service_role;
+
+-- Mapa tematów (to samo co 004_tematy.sql)
+alter table public.lessons
+  add column if not exists topic text,
+  add column if not exists estimate int;
+create index if not exists lessons_rated_idx on public.lessons (user_id, lang, completed_at) where estimate is not null;

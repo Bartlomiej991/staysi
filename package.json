@@ -4,8 +4,16 @@
   "private": true,
   "description": "STAYSI: aplikacja do nauki języków oparta na metodzie trzech filarów, z Claude jako nauczycielem.",
   "type": "module",
-  "engines": { "node": ">=20" },
+  "engines": {
+    "node": ">=20"
+  },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0"
+  },
+  "scripts": {
+    "test": "node --test --test-reporter=spec tests/*.test.mjs"
+  },
+  "devDependencies": {
+    "jsdom": "^25.0.1"
   }
 }

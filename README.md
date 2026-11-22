@@ -1,5 +1,7 @@
 # STAYSI
 
+[![CI](https://github.com/Bartlomiej991/staysi/actions/workflows/ci.yml/badge.svg)](https://github.com/Bartlomiej991/staysi/actions/workflows/ci.yml)
+
 A mobile-first language-learning app that turns Luca Lampariello's three-pillar method into a daily routine, with Claude as a personal tutor.
 
 **Languages:** Polish, German, Spanish, French, English, Italian · **Levels:** A1–C2 · **Installs as a home-screen app (PWA)** on iPhone and Android
@@ -38,18 +40,28 @@ Phone (PWA) ──► Vercel function /api/ai ──► Claude API
 
 ## Tech stack
 
-Vanilla JavaScript (ES modules, no build step) · Vercel serverless functions (Node 20) · Supabase (Auth + Postgres + RLS) · Claude API · Web Speech API for text-to-speech and dictation
+Vanilla JavaScript (ES modules, no build step) · Vercel serverless functions (Node 20) · Supabase (Auth + Postgres + RLS) · Claude API with prompt caching · Web Speech API for text-to-speech and dictation · GitHub Actions + Vercel Deployment Checks (CI/CD) · node:test + jsdom
 
 ## Project structure
 
 ```
-api/ai.js            all Claude actions: lesson, review, check, feedback, placement, plan, photo
+api/ai.js            all Claude actions: lesson, review, check, feedback, placement, plan, photo, word cards
 api/config.js        public client config
-lib/server.js        auth check, Claude call, cost logging, limits
-public/              the app (HTML, CSS, JS, icons, manifest)
-supabase/schema.sql  tables, RLS policies, grants
+lib/server.js        auth check, Claude call with JSON retry, cost logging, limits
+public/app.js        screens, lessons, onboarding, placement, back navigation
+public/words.js      language screen and spaced-repetition word bank
+public/learn.js      grammar notes ("My grammar") and the in-app learning guide
+supabase/            schema.sql (tables, RLS, grants) and incremental migrations
+tests/               end-to-end UI test in jsdom with fake Supabase and API, server and syntax tests
+.github/workflows/   CI: runs the tests on every push
 docs/                product plan and setup guide
 ```
+
+## Testing and CI/CD
+
+`npm test` runs 26 tests with Node's built-in test runner. The main one drives the whole app in jsdom the way a user would (onboarding, placement test, a full lesson, the word bank, grammar notes, back navigation) against an in-memory fake of Supabase and the API, so it needs no keys and costs nothing. Other tests cover the level rules (calibration, then promotion only from the median of the last five lessons across at least two topics), the JSON-retry logic for Claude responses, syntax of every source file and a scan for leaked keys.
+
+On every push GitHub Actions runs the suite. Vercel builds each commit, but a Deployment Check holds the release until the `tests` job passes, so a broken build never reaches production.
 
 ## Running your own copy
 

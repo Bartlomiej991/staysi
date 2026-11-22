@@ -1,5 +1,7 @@
 // STAYSI: aplikacja (przeglądarka). Dane w Supabase (RLS), Claude przez nasz serwer /api/ai.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import * as Words from "./words.js";
+import * as Learn from "./learn.js";
 
 /* ================= Dane stałe ================= */
 const LANGS = {
@@ -33,7 +35,7 @@ const TIMES = [
   { m: 45, l: "Pełny trening", bg: "#FF8E6E", fg: "#4A1405", n: 12 }
 ];
 const INTERVAL = [1, 1, 3, 7, 14, 30]; // dni do następnej powtórki według siły zwrotu
-const PURPOSE = { lesson: "Lekcja", review: "Karty powtórki", check: "Sprawdzenie odpowiedzi", feedback: "Poprawki", placement: "Test poziomu", plan: "Plan nauki", vocative: "Forma imienia", photo: "Zdjęcie strony" };
+const PURPOSE = { lesson: "Lekcja", review: "Karty powtórki", check: "Sprawdzenie odpowiedzi", feedback: "Poprawki", placement: "Test poziomu", plan: "Plan nauki", vocative: "Forma imienia", photo: "Zdjęcie strony", enrich: "Karty słówek" };
 
 /* ================= Ikony ================= */
 const I = {
@@ -48,6 +50,17 @@ const I = {
   wallet: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="6" width="18" height="14" rx="3"/><path d="M3 10h18"/><path d="M16 15h2"/></svg>',
   user: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg>'
 };
+
+/* ================= Flagi (SVG, działają też na Windowsie) ================= */
+const FLAG_SVG = {
+  pl: '<rect width="30" height="10" fill="#fff"/><rect y="10" width="30" height="10" fill="#DC143C"/>',
+  de: '<rect width="30" height="6.67" fill="#000"/><rect y="6.67" width="30" height="6.67" fill="#DD0000"/><rect y="13.33" width="30" height="6.67" fill="#FFCE00"/>',
+  es: '<rect width="30" height="20" fill="#AA151B"/><rect y="5" width="30" height="10" fill="#F1BF00"/>',
+  fr: '<rect width="10" height="20" fill="#0055A4"/><rect x="10" width="10" height="20" fill="#fff"/><rect x="20" width="10" height="20" fill="#EF4135"/>',
+  it: '<rect width="10" height="20" fill="#009246"/><rect x="10" width="10" height="20" fill="#fff"/><rect x="20" width="10" height="20" fill="#CE2B37"/>',
+  en: '<rect width="30" height="20" fill="#012169"/><path d="M0,0 L30,20 M30,0 L0,20" stroke="#fff" stroke-width="4"/><path d="M0,0 L30,20 M30,0 L0,20" stroke="#C8102E" stroke-width="1.6"/><path d="M15,0 V20 M0,10 H30" stroke="#fff" stroke-width="6"/><path d="M15,0 V20 M0,10 H30" stroke="#C8102E" stroke-width="3.6"/>'
+};
+const flag = (k, w = 36) => `<svg width="${w}" height="${Math.round(w * 2 / 3)}" viewBox="0 0 30 20" aria-hidden="true" style="flex:none;border-radius:5px;box-shadow:0 0 0 1px rgba(0,0,0,.15)">${FLAG_SVG[k] || ""}</svg>`;
 
 /* ================= Stan ================= */
 let sb = null;
@@ -135,13 +148,17 @@ async function loadAll() {
   const id = uid();
   const monthStart = new Date(); monthStart.setDate(1); monthStart.setHours(0, 0, 0, 0);
   const since = new Date(); since.setDate(since.getDate() - 120);
-  const [p, l, b, u, ls] = await Promise.all([
+  const [p, l, b, u, ls, g, rt] = await Promise.all([
     sb.from("profiles").select("*").eq("id", id).single(),
     sb.from("user_languages").select("*"),
     sb.from("bank").select("*").order("created_at", { ascending: false }),
     sb.from("usage").select("*").gte("created_at", monthStart.toISOString()).order("created_at", { ascending: false }),
-    sb.from("lessons").select("lang,completed_at").not("completed_at", "is", null).gte("completed_at", since.toISOString())
+    sb.from("lessons").select("lang,completed_at").not("completed_at", "is", null).gte("completed_at", since.toISOString()),
+    sb.from("grammar").select("*").order("updated_at", { ascending: false }),
+    sb.from("lessons").select("lang,topic,estimate").not("estimate", "is", null).order("completed_at", { ascending: false }).limit(300)
   ]);
+  S.grammar = g?.data || [];
+  S.rated = (rt && !rt.error && rt.data) || [];
   S.profile = p.data || { id, name: "", onboarded: false, interests: [] };
   S.langs = {}; (l.data || []).forEach(r => (S.langs[r.lang] = r));
   S.bank = b.data || []; S.usage = u.data || [];
@@ -179,14 +196,22 @@ function render() {
   else if (S.view === "ob") html = renderOb();
   else if (S.view === "placement") html = renderPlacement();
   else if (S.view === "lesson") html = renderLesson();
+  else if (S.view === "lang") html = Words.renderLang();
+  else if (S.view === "words") html = Words.renderWords();
+  else if (S.view === "wlist") html = Words.renderList();
+  else if (S.view === "grammar") html = Learn.renderGrammar();
+  else if (S.view === "guide") html = Learn.renderGuide();
   else html = renderMain();
   if (S.sheet) html += renderSheet();
   if (S.add) html += renderAdd();
   if (S.busy) html += `<div class="busy" role="status" aria-live="polite"><div class="spinner"></div><h2>${esc(S.busy)}</h2></div>`;
   app.innerHTML = html;
   afterRender();
+  syncHistory();
 }
 const scrollTop = () => { const s = document.querySelector(".screen"); if (s) s.scrollTop = 0; };
+const CTX = { S, get sb() { return sb; }, ai, esc, speak, toast, withBusy, render, scrollTop, day, uid, LANGS, flag, band, pct, nextBand, I };
+Words.init(CTX); Learn.init(CTX);
 
 function renderSetup() {
   return `<div class="screen bg-indigo"><h2>Brak konfiguracji</h2><p>Serwer nie zwrócił adresu Supabase. Sprawdź zmienne środowiskowe SUPABASE_URL i SUPABASE_ANON_KEY w Vercel.</p></div>`;
@@ -216,7 +241,7 @@ function obShell(body, btn, cls = "bg-indigo", dots = true) {
   const st = S.ob.step;
   return `<div class="screen ${cls}">${body}</div>
   <div class="footer ${cls}">${dots ? `<div class="dots" style="margin-bottom:12px">${Array.from({ length: OB_LAST + 1 }, (_, i) => `<i class="${i <= st ? "on" : ""}"></i>`).join("")}</div>` : ""}
-  <button class="btn btn-sun" data-act="obNext">${btn}</button></div>`;
+  <div class="twobtn">${st >= 1 && st <= 8 ? `<button class="btn btn-ghost" style="color:#fff" data-act="obBack">Wstecz</button>` : ""}<button class="btn btn-sun" data-act="obNext">${btn}</button></div></div>`;
 }
 function renderOb() {
   const st = S.ob.step, P = S.profile;
@@ -237,7 +262,7 @@ function renderOb() {
     <div class="bubble tilt-l" style="background:var(--coral-2);color:#4A1405"><b>Mówienie.</b> Od pierwszego dnia mówisz i piszesz, a Claude cię poprawia.</div>
     <p class="small soft-2">Więcej o metodzie znajdziesz w zakładce O mnie.</p>`, "Rozumiem");
   if (st === 3) return obShell(`<h2>Twój język ojczysty</h2><p class="soft">W nim dostaniesz tłumaczenia i wyjaśnienia.</p>
-    <div class="opts">${Object.entries(LANGS).map(([k, v]) => `<button class="opt ${P.native === k ? "sel" : ""}" data-act="native" data-k="${k}">${v.name}</button>`).join("")}</div>`, "Dalej");
+    <div class="opts">${Object.entries(LANGS).map(([k, v]) => `<button class="opt ${P.native === k ? "sel" : ""}" data-act="native" data-k="${k}">${flag(k)}${v.name}</button>`).join("")}</div>`, "Dalej");
   if (st === 4) return obShell(`<h2>Jak masz na imię?</h2>
     <label class="f">Imię<input class="field" type="text" id="name" value="${esc(P.name)}" autocomplete="given-name" placeholder="np. Bartek"></label>`, "Dalej");
   if (st === 5) return obShell(`<h2>Opowiedz o sobie</h2><p class="soft">Kilka słów wystarczy. Każde pole możesz pominąć.</p>
@@ -252,7 +277,7 @@ function renderOb() {
     <div class="chips">${[...new Set([...GOALS, ...goals])].map(g => `<button class="chip ${goals.includes(g) ? "sel" : ""}" data-act="goal" data-k="${esc(g)}">${esc(g)}</button>`).join("")}</div>
     <div class="answer"><label class="f" style="flex:1">Własny cel<input class="field" type="text" id="ownGoal" placeholder="np. egzamin, rozmowa o pracę"></label><button class="pillbtn" style="background:#fff;color:var(--indigo);height:52px" data-act="addGoal">Dodaj</button></div>`, "Dalej"); }
   if (st === 8) return obShell(`<h2>Których języków chcesz się uczyć?</h2><p class="soft">Możesz wybrać kilka.</p>
-    <div class="opts">${Object.entries(LANGS).filter(([k]) => k !== P.native).map(([k, v]) => `<button class="opt ${S.ob.sel.includes(k) ? "sel" : ""}" data-act="pick" data-k="${k}"><b style="font-family:var(--display);font-size:22px">${v.hi}</b>${v.name}</button>`).join("")}</div>`, "Dalej");
+    <div class="opts">${Object.entries(LANGS).filter(([k]) => k !== P.native).map(([k, v]) => `<button class="opt ${S.ob.sel.includes(k) ? "sel" : ""}" data-act="pick" data-k="${k}">${flag(k)}${v.name}</button>`).join("")}</div>`, "Dalej");
   if (st === 9) return obShell(`<h2>${esc(greetName())}, twój plan</h2>
     ${S.ob.sel.map((k, i) => { const s = S.langs[k]?.score || 22, t = TILE[i % TILE.length]; return `<div class="bubble ${i % 2 ? "right tilt-r" : "tilt-l"}" style="background:${t.bg};color:${t.fg}"><div class="row"><b style="font-family:var(--display);font-size:30px">${LANGS[k].hi}</b><b>${band(s)[0]}</b></div><span>${LANGS[k].name}</span></div>`; }).join("")}
     <div class="card"><p>${esc(S.ob.plan || "Każdego dnia: krótka powtórka, nowy materiał i zadanie z mówienia. Na start polecam 15 minut dziennie.")}</p></div>`, "Zacznij pierwszą lekcję");
@@ -262,21 +287,21 @@ function renderOb() {
 /* --- Test poziomu --- */
 function renderPlacement() {
   const p = S.pl, L = LANGS[p.lang];
-  if (p.step === "self") return `<div class="screen bg-indigo"><span class="sticker st-sun">${esc(L.name.toUpperCase())}</span>
+  if (p.step === "self") return `<div class="screen bg-indigo"><div style="display:flex;align-items:center;gap:12px">${flag(p.lang, 42)}<span class="sticker st-sun" style="align-self:center">${esc(L.name.toUpperCase())}</span></div>
     <h2>Jak oceniasz swój poziom?</h2>
     <div class="opts">${SELF.map((o, i) => `<button class="opt ${p.self === i ? "sel" : ""}" data-act="plSelf" data-k="${i}">${o.l}</button>`).join("")}</div></div>
-    <div class="footer bg-indigo"><button class="btn btn-sun" data-act="plNext">Dalej</button></div>`;
+    <div class="footer bg-indigo twobtn"><button class="btn btn-ghost" style="color:#fff" data-act="plBack">Wstecz</button><button class="btn btn-sun" data-act="plNext">Dalej</button></div>`;
   if (p.step === "q") {
     const q = p.questions[p.qi];
     return `<div class="screen bg-indigo"><span class="sticker st-sun">TEST · ${p.qi + 1} Z ${p.questions.length + 1}</span>
       <h2 style="font-size:26px">${esc(q.q)}</h2>
       <div class="opts">${q.options.map((o, i) => `<button class="opt ${p.answers[p.qi] === i ? "sel" : ""}" data-act="plAns" data-k="${i}">${esc(o)}</button>`).join("")}</div></div>
-      <div class="footer bg-indigo"><button class="btn btn-sun" data-act="plNext">Dalej</button></div>`;
+      <div class="footer bg-indigo twobtn"><button class="btn btn-ghost" style="color:#fff" data-act="plBack">Wstecz</button><button class="btn btn-sun" data-act="plNext">Dalej</button></div>`;
   }
   if (p.step === "write") return `<div class="screen bg-indigo"><span class="sticker st-sun">TEST · OSTATNIE ZADANIE</span>
     <h2 style="font-size:26px">${esc(p.writing_prompt)}</h2>
     <div class="answer"><textarea class="field" id="plWrite" placeholder="Napisz albo podyktuj kilka zdań…">${esc(p.writing || "")}</textarea><button class="mic" data-act="mic" data-k="plWrite" aria-label="Odpowiedz głosem">${I.mic}</button></div></div>
-    <div class="footer bg-indigo"><button class="btn btn-sun" data-act="plNext">Sprawdź poziom</button></div>`;
+    <div class="footer bg-indigo twobtn"><button class="btn btn-ghost" style="color:#fff" data-act="plBack">Wstecz</button><button class="btn btn-sun" data-act="plNext">Sprawdź poziom</button></div>`;
   if (p.step === "result") return `<div class="screen bg-indigo"><div class="grow"></div>
     <span class="sticker st-sun">${esc(L.name.toUpperCase())}</span>
     <h1 style="font-size:80px">${esc(band(p.score)[0])}</h1>
@@ -303,11 +328,12 @@ function renderHome() {
     const t = TILE[i % TILE.length], done = todayDone(l.lang), right = i % 2 === 1;
     return `<div style="display:flex;flex-direction:column;${right ? "align-items:flex-end" : ""}">
       <div class="bubble lang ${right ? "right tilt-r" : "tilt-l"}" style="background:${t.bg};color:${t.fg};${right ? "width:88%" : ""}">
-        <div class="row"><span class="hi">${LANGS[l.lang].hi}</span><b>${band(l.score)[0]}</b></div>
+        <div class="row"><span class="hi" style="display:flex;align-items:center;gap:10px">${flag(l.lang, 34)}${LANGS[l.lang].hi}</span><b>${band(l.score)[0]}</b></div>
         <span style="font-weight:600">${LANGS[l.lang].name} · ${pct(l.score)}% drogi do ${nextBand(l.score)}</span>
         <div class="bar" aria-hidden="true"><i style="width:${pct(l.score)}%"></i></div>
-        ${done ? `<span class="stamp">ZROBIONE DZIŚ</span><button class="go" data-act="start" data-k="${l.lang}" style="background:transparent;color:inherit;border:2px solid currentColor;font-size:15px;padding:8px 14px">Jeszcze jedna lekcja</button>`
-               : `<button class="go" data-act="start" data-k="${l.lang}">Zaczynamy ${I.arrow}</button>`}
+        ${done ? `<span class="stamp">ZROBIONE DZIŚ</span>` : ""}
+        ${Words.dueCount(l.lang) ? `<span class="small" style="font-weight:700">${Words.dueCount(l.lang)} słówek czeka na powtórkę</span>` : ""}
+        <button class="go" data-act="openLang" data-k="${l.lang}" ${done ? 'style="background:transparent;color:inherit;border:2px solid currentColor;font-size:15px;padding:8px 14px"' : ""}>${done ? "Otwórz" : "Zaczynamy"} ${I.arrow}</button>
       </div></div>`;
   }).join("")}
   <button class="btn btn-ghost" data-act="addLang" style="color:var(--lilac)">¿Hola? Bonjour? <span style="color:var(--sun)">+ Nowy język</span></button>
@@ -385,23 +411,27 @@ function renderMe() {
 }
 
 /* --- Nakładki: czas i nowy język --- */
+const SOURCES = [["auto", "Claude wymyśla", "temat z Twoich zainteresowań"], ["topic", "Mój temat", "wpisujesz, o czym"], ["url", "Artykuł z linku", "Claude go przerobi"], ["text", "Mój tekst", "wklejasz fragment"]];
 function renderSheet() {
-  return `<div class="overlay" data-act="closeSheet"><div class="sheet" role="dialog" aria-label="Ile masz dziś czasu?">
-    <div class="grab"></div><h2>Ile masz dziś<br>czasu?</h2>
+  const src = S.src || "auto";
+  const field = (k, html) => `<div class="srcfield" data-src="${k}" ${src === k ? "" : 'style="display:none"'}>${html}</div>`;
+  return `<div class="overlay" data-act="closeSheet"><div class="sheet" role="dialog" aria-label="Dzisiejsza lekcja">
+    <div class="grab"></div><h2>Dzisiejsza lekcja</h2>
+    <p class="small soft-2" style="font-weight:800">1. O czym będzie tekst?</p>
+    <div class="srcs">${SOURCES.map(([k, l, d]) => `<button class="src ${src === k ? "sel" : ""}" data-act="srcPick" data-k="${k}" aria-pressed="${src === k}"><b>${l}</b><span>${d}</span></button>`).join("")}</div>
+    ${field("topic", `<input class="field" type="text" id="srcTopic" placeholder="np. rozmowa o pracę, zakupy na targu">`)}
+    ${field("url", `<input class="field" type="url" id="srcUrl" placeholder="https://… link do artykułu">`)}
+    ${field("text", `<textarea class="field" id="srcText" style="min-height:80px" placeholder="Wklej tekst z książki, artykułu albo maila"></textarea>`)}
+    <p class="small soft-2" style="font-weight:800">2. Ile masz czasu? Stuknij, żeby zacząć.</p>
     <div class="times">${TIMES.map((t, i) => `<button class="time ${i % 2 ? "tilt-r" : "tilt-l"} ${S.profile._lastTime === t.m ? "sel" : ""}" style="background:${t.bg};color:${t.fg}" data-act="time" data-k="${t.m}"><b>${t.m}<span style="font-size:17px"> min</span></b><small>${t.l}</small></button>`).join("")}</div>
-    <details style="color:var(--lilac)"><summary class="small" style="cursor:pointer">Własny temat albo źródło (opcjonalnie)</summary>
-      <div style="display:flex;flex-direction:column;gap:10px;margin-top:10px">
-        <label class="f">Temat<input class="field" type="text" id="srcTopic" placeholder="np. zakupy na targu"></label>
-        <label class="f">Link do artykułu<input class="field" type="url" id="srcUrl" placeholder="https://…"></label>
-        <label class="f">Albo wklej tekst<textarea class="field" id="srcText" style="min-height:80px"></textarea></label>
-      </div></details>
-    <p class="small soft-2">${esc(LANGS[S.sheet].name)} · im więcej czasu, tym więcej powtórek i mówienia</p></div></div>`;
+    <p class="small soft-2">${esc(LANGS[S.sheet].name)} · im więcej czasu, tym dłuższy tekst i więcej mówienia</p>
+    <button class="btn btn-ghost" style="color:var(--lilac)" data-act="closeSheet">Anuluj</button></div></div>`;
 }
 function renderAdd() {
   const free = Object.keys(LANGS).filter(k => k !== S.profile.native && !S.langs[k]);
   return `<div class="overlay" data-act="closeAdd"><div class="sheet" role="dialog" aria-label="Nowy język"><div class="grab"></div><h2>Nowy język</h2>
-    ${free.length ? `<div class="opts">${free.map(k => `<button class="opt" data-act="addPick" data-k="${k}"><b style="font-family:var(--display);font-size:22px">${LANGS[k].hi}</b>${LANGS[k].name}</button>`).join("")}</div>` : "<p>Uczysz się już wszystkich dostępnych języków.</p>"}
-  </div></div>`;
+    ${free.length ? `<div class="opts">${free.map(k => `<button class="opt" data-act="addPick" data-k="${k}">${flag(k)}${LANGS[k].name}</button>`).join("")}</div>` : "<p>Uczysz się już wszystkich dostępnych języków.</p>"}
+    <button class="btn btn-ghost" style="color:var(--lilac)" data-act="closeAdd">Anuluj</button></div></div>`;
 }
 
 /* --- Lekcja --- */
@@ -409,7 +439,7 @@ function lessonBg() { const L = S.L; return L.stage === "review" ? "bg-blue" : L
 function progress() {
   const L = S.L, total = L.cards.length + L.retry.length;
   const r = L.first ? 0 : L.stage === "review" ? (L.introSeen ? L.i / Math.max(1, total) : 0) : 1;
-  const steps = L.C.mode === "C" ? 3 : 4;
+  const steps = matSteps(L).baro + 1;
   const a = L.stage === "review" ? 0 : L.stage === "mat" ? (L.step + 1) / steps : 1;
   const c = L.stage === "act" ? (L.fb ? 1 : 0.4) : L.stage === "sum" ? 1 : 0;
   return `<div class="lbar"><button class="x" data-act="quit" aria-label="Zamknij lekcję">${I.close}</button>
@@ -425,7 +455,7 @@ function renderReview() {
   const L = S.L;
   if (!L.introSeen) {
     if (L.C.mode === "C") {
-      const items = S.bank.filter(b => b.lang === L.lang).slice(0, 8);
+      const items = S.bank.filter(b => b.lang === L.lang && b.introduced !== false).slice(0, 8);
       return `<div class="screen"><span class="sticker st-sun">POWTÓRKA · SKARBIEC</span><h2>Twój Skarbiec</h2>
         <p style="color:#D6E2FF">Słowa z czytania razem ze zdaniem, z którego pochodzą.</p>
         <div class="card">${items.map(b => `<div class="row"><div><b>${esc(b.chunk)}</b> · <span class="muted">${esc(b.meaning)}</span>${b.context ? `<br><span class="small" style="font-style:italic">${esc(b.context)}</span>` : ""}</div><button class="spk" data-act="say" data-k="${esc(b.context || b.chunk)}" data-l="${L.lang}" aria-label="Odsłuchaj">${I.speaker}</button></div>`).join('<div class="divider"></div>')}</div></div>
@@ -456,11 +486,19 @@ function chunked(line) {
   });
   return html;
 }
+function matSteps(L) {
+  const isC = L.C.mode === "C", reading = isC ? 2 : 3, gram = (L.C.grammar || []).length ? reading : -1;
+  return { gram, baro: gram >= 0 ? gram + 1 : reading };
+}
+const backBtn = (act, color = "#fff") => `<button class="btn btn-ghost" style="color:${color}" data-act="${act}">Wstecz</button>`;
 function renderMat() {
-  const L = S.L, C = L.C, step = L.step, isC = C.mode === "C", baroStep = isC ? 2 : 3;
+  const L = S.L, C = L.C, step = L.step, isC = C.mode === "C", ms = matSteps(L), baroStep = ms.baro;
+  if (step === ms.gram) return `<div class="screen">${Learn.lessonCard(L)}</div>
+    <div class="footer twobtn">${backBtn("matBack")}<button class="btn btn-white" style="color:var(--green)" data-act="matNext">Dalej</button></div>`;
   if (step === baroStep) return `<div class="screen"><span class="sticker st-sun">JAK POSZŁO?</span><h2>Jak ci się ${isC ? "czytało" : "słuchało"}?</h2>
     <p style="color:#CDEBDD">Odpowiedź ustawi trudność kolejnych lekcji.</p>
-    <div class="baro">${[["Za łatwe", "zzz", 1], ["W sam raz", "ok!", 0], ["Za trudne", "uff", -1]].map(([l, e, v]) => `<button data-act="baro" data-k="${v}" data-l="${l}"><span>${e}</span>${l}</button>`).join("")}</div></div>`;
+    <div class="baro">${[["Za łatwe", "zzz", 1], ["W sam raz", "ok!", 0], ["Za trudne", "uff", -1]].map(([l, e, v]) => `<button data-act="baro" data-k="${v}" data-l="${l}"><span>${e}</span>${l}</button>`).join("")}</div></div>
+    <div class="footer twobtn">${backBtn("matBack")}</div>`;
   const label = isC ? ["CZYTANIE", "SŁUCHANIE"][step] : ["KROK 1 · TŁUMACZENIE", "KROK 2 · ORYGINAŁ", "KROK 3 · SŁUCHANIE"][step];
   let body = "";
   if (isC) {
@@ -470,7 +508,7 @@ function renderMat() {
     body = C.lines.map((ln, i) => `<div class="msg ${ln.me ? "me" : ""} ${L.hl === i ? "hl" : ""}"><span class="who">${esc(ln.speaker)}</span>
       <div class="b"><span>${step === 0 ? esc(ln.translation) : chunked(ln)}</span>${step > 0 ? `<button class="spk" data-act="sayLine" data-k="${i}" aria-label="Odsłuchaj">${I.speaker}</button>` : ""}</div></div>`).join("");
   }
-  const tip = L.tip ? `<div class="tip"><b>${esc(L.tip.text)}</b> = ${esc(L.tip.meaning)}<br>Zapisane w twoim banku</div>` : "";
+  const tip = L.tip ? `<div class="tip"><b>${esc(L.tip.text)}</b> = ${esc(L.tip.meaning)}${L.tip.how ? `<br><span class="how">${esc(L.tip.how)}</span>` : ""}<br><span class="small">Zapisane w twoim banku</span></div>` : "";
   const hint = (isC && step === 0) ? `<p class="small" style="color:#CDEBDD">Czytasz od razu oryginał. PL pokazuje tłumaczenie akapitu, gdy utkniesz. Stuknięte słowo trafia do Skarbca.</p>`
     : (!isC && step === 1) ? `<p class="small" style="color:#CDEBDD">Stuknij zakreślony zwrot, żeby go zapisać.</p>` : "";
   const listen = ((isC && step === 1) || (!isC && step === 2)) ? `<button class="pillbtn" style="background:var(--sun);color:var(--ink);align-self:flex-start" data-act="playAll">${I.speaker} Odtwórz całość</button>` : "";
@@ -478,7 +516,7 @@ function renderMat() {
   return `<div class="screen"><span class="sticker st-sun">${label}</span>
     <div><h2 style="font-size:36px">${esc(C.title)}</h2><p style="color:#CDEBDD">${esc(C.intro)}</p></div>
     ${hint}${listen}<div style="display:flex;flex-direction:column;gap:10px">${body}</div>${tip}${photo}</div>
-    <div class="footer"><button class="btn btn-white" style="color:var(--green)" data-act="matNext">Dalej</button></div>`;
+    <div class="footer twobtn">${step > 0 ? backBtn("matBack") : ""}<button class="btn btn-white" style="color:var(--green)" data-act="matNext">Dalej</button></div>`;
 }
 function renderAct() {
   const L = S.L, A = L.C.activation || {}, isC = L.C.mode === "C";
@@ -502,10 +540,10 @@ function renderAct() {
     ${(A.chunks || []).length ? `<div class="chips">${A.chunks.map(c => `<span class="chip sel">${esc(c)}</span>`).join("")}</div>` : ""}
     ${A.hint ? `<p class="small muted">${esc(A.hint)}</p>` : ""}${roundInfo}
     <div class="answer"><textarea class="field" id="act" placeholder="Napisz albo podyktuj…"></textarea><button class="mic" data-act="mic" data-k="act" aria-label="Odpowiedz głosem">${I.mic}</button></div></div>
-    <div class="footer"><button class="btn btn-coral" data-act="actSend">${isC && r < 2 ? `Gotowe, runda ${r + 2}` : "Sprawdź z Claude"}</button></div>`;
+    <div class="footer twobtn">${r === 0 ? backBtn("actBack", "var(--ink)") : ""}<button class="btn btn-coral" data-act="actSend">${isC && r < 2 ? `Gotowe, runda ${r + 2}` : "Sprawdź z Claude"}</button></div>`;
 }
 function renderSum() {
-  const L = S.L, st = streak(), q = quote(), due = S.bank.filter(b => b.lang === L.lang && b.due <= day(1)).length;
+  const L = S.L, st = streak(), q = quote(), due = S.bank.filter(b => b.lang === L.lang && b.introduced !== false && b.due <= day(1)).length;
   return `<div class="screen bg-indigo">
     <div class="blob" style="width:280px;height:280px;background:var(--indigo-2);bottom:-120px;left:-100px"></div>
     <div class="row" style="justify-content:flex-start;gap:14px;position:relative"><div style="width:74px;height:74px;border-radius:24px;background:var(--sun);display:flex;align-items:center;justify-content:center;transform:rotate(-6deg);box-shadow:0 5px 0 var(--sun-dark)">${I.check}</div>
@@ -517,7 +555,7 @@ function renderSum() {
       <div class="bubble tilt-l" style="align-self:flex-start;background:var(--coral-2);color:#4A1405;padding:12px 18px"><b style="font-family:var(--display);font-size:30px">1</b> zadanie z mówienia</div></div>
     <div class="btn-ghost" style="border-radius:20px;padding:10px 16px;color:var(--lilac);position:relative">Jutro czeka <b style="color:var(--sun)">${due}</b> zwrotów do powtórki</div>
     <div class="grow"></div><p class="quote soft" style="position:relative">„${esc(q.t)}”<br><b style="color:#fff">${esc(q.a)}</b></p></div>
-    <div class="footer bg-indigo"><button class="btn btn-sun" data-act="home">Wróć do startu</button></div>`;
+    <div class="footer bg-indigo"><button class="btn btn-sun" data-act="lessonDone">Gotowe</button></div>`;
 }
 
 /* ================= Po renderze ================= */
@@ -532,6 +570,7 @@ function afterRender() {
   document.querySelectorAll("select[data-voice]").forEach(sel => sel.addEventListener("change", () => { S.voice[sel.dataset.voice] = sel.value; saveLocal("staysiVoices", S.voice); speak(LANGS[sel.dataset.voice].hi, sel.dataset.voice); }));
   const rt = $("#rate"); if (rt) rt.addEventListener("input", () => { S.rate = +rt.value; $("#rateVal").textContent = Math.round(S.rate * 100) + "%"; saveLocal("staysiRate", S.rate); });
   const pg = $("#pages"); if (pg) pg.addEventListener("change", () => onPhoto(pg.files[0]));
+  Words.afterRender();
 }
 
 /* ================= Zdarzenia ================= */
@@ -545,6 +584,40 @@ document.addEventListener("keydown", e => {
   const el = e.target.closest?.('[role="button"][data-act]');
   if (el && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); act(el.dataset.act, el.dataset.k, el); }
 });
+
+/* Systemowy gest "wstecz" (Android, przeglądarka): cofa o jeden ekran zamiast zamykać aplikację */
+const MAIN_TABS = ["bank", "cost", "me"];
+function canGoBack() {
+  if (S.busy) return true;
+  if (S.sheet || S.add) return true;
+  if (["loading", "setup", "auth", "home"].includes(S.view)) return false;
+  if (S.view === "ob") return S.ob.step >= 1 && S.ob.step <= 8;
+  if (S.view === "placement") return !!S.pl && S.pl.step !== "result";
+  if (S.view === "lesson") return !!S.L && S.L.stage !== "sum";
+  return true;
+}
+function goBack() {
+  if (S.busy) return true;
+  if (S.sheet) { S.sheet = null; render(); return true; }
+  if (S.add) { S.add = null; render(); return true; }
+  const v = S.view, L = S.L;
+  if (v === "lang" || MAIN_TABS.includes(v)) { S.view = "home"; render(); scrollTop(); return true; }
+  if (["wlist", "grammar", "guide"].includes(v)) { act(v === "wlist" ? "wBack" : "toLang"); return true; }
+  if (v === "words") { act(S.W?.intro > 0 ? "wIntroBack" : "wQuit"); return true; }
+  if (v === "ob" && S.ob.step >= 1 && S.ob.step <= 8) { act("obBack"); return true; }
+  if (v === "placement" && S.pl && S.pl.step !== "result") { plBack(); return true; }
+  if (v === "lesson" && L) {
+    if (L.stage === "mat" && L.step > 0) { act("matBack"); return true; }
+    if (L.stage === "act" && !L.fb && !(L.rounds || []).length) { act("actBack"); return true; }
+    if (L.stage !== "sum") { act("quit"); return true; }
+  }
+  return false;
+}
+let histTop = false;
+function syncHistory() {
+  try { if (!histTop && canGoBack()) { history.pushState({ staysi: 1 }, ""); histTop = true; } } catch {}
+}
+window.addEventListener("popstate", () => { histTop = false; goBack(); syncHistory(); });
 
 async function onAuth(e) {
   e.preventDefault();
@@ -565,8 +638,8 @@ async function onAuth(e) {
   } finally { S.busy = null; render(); }
 }
 
-function startPlacement(lang, after) {
-  S.pl = { lang, step: "self", self: undefined, questions: [], qi: 0, answers: [], after };
+function startPlacement(lang, after, back) {
+  S.pl = { lang, step: "self", self: undefined, questions: [], qi: 0, answers: [], after, back };
   S.view = "placement"; render(); scrollTop();
 }
 async function finishPlacement(score, reason) {
@@ -580,14 +653,17 @@ async function finishPlacement(score, reason) {
 
 async function act(a, k, el) {
   const L = S.L, P = S.profile;
+  if (/^w[A-Z]/.test(a) || a === "openLang") { if (await Words.act(a, k)) return; }
+  if (["toLang", "openGrammar", "openGuide", "gToggle"].includes(a)) { if (await Learn.act(a, k)) return; }
   switch (a) {
     case "authMode": S.auth = { mode: S.auth.mode === "login" ? "register" : "login", msg: "" }; return render();
     case "tab": S.view = k; render(); return scrollTop();
     case "say": return speak(k, el.dataset.l);
-    case "mic": return dictate(k, L?.lang || S.pl?.lang || "en", el);
+    case "mic": return dictate(k, S.W?.lang || L?.lang || S.pl?.lang || S.langView || "en", el);
 
     /* pierwsze uruchomienie */
     case "obNext": return obNext();
+    case "obBack": if (S.ob.step > 0) S.ob.step--; render(); return scrollTop();
     case "native": P.native = k; S.ob.sel = S.ob.sel.filter(x => x !== k); return render();
     case "interest": { const list = P.interests || []; P.interests = list.includes(k) ? list.filter(x => x !== k) : [...list, k]; if (S.view === "me") return render(); return render(); }
     case "addInterest": { const v = $("#ownInt").value.trim(); if (v && !(P.interests || []).includes(v)) P.interests = [...(P.interests || []), v]; return render(); }
@@ -600,15 +676,27 @@ async function act(a, k, el) {
     case "plAns": S.pl.answers[S.pl.qi] = +k; return render();
     case "plNext": return plNext();
     case "plDone": { const after = S.pl.after; S.pl = null; return after(); }
+    case "plBack": return plBack();
 
     /* start i zakładki */
     case "start": S.sheet = k; return render();
-    case "closeSheet": S.sheet = null; return render();
-    case "time": return startLesson(S.sheet, +k);
+    case "closeSheet": S.sheet = null; S.src = "auto"; return render();
+    case "srcPick": {
+      S.src = k;
+      document.querySelectorAll(".src").forEach(b => { const on = b.dataset.k === k; b.classList.toggle("sel", on); b.setAttribute("aria-pressed", on); });
+      document.querySelectorAll(".srcfield").forEach(f => { f.style.display = f.dataset.src === k ? "" : "none"; });
+      document.querySelector(`.srcfield[data-src="${k}"] .field`)?.focus();
+      return;
+    }
+    case "time": {
+      const src = S.src || "auto", need = { topic: ["#srcTopic", "Wpisz temat"], url: ["#srcUrl", "Wklej link do artykułu"], text: ["#srcText", "Wklej tekst"] }[src];
+      if (need && !($(need[0])?.value || "").trim()) { toast(`${need[1]} albo wybierz „Claude wymyśla”.`); $(need[0])?.focus(); return; }
+      return startLesson(S.sheet, +k);
+    }
     case "addLang": S.add = true; return render();
     case "closeAdd": S.add = null; return render();
-    case "addPick": S.add = null; return startPlacement(k, () => { S.view = "home"; render(); });
-    case "retest": return startPlacement(k, () => { S.view = "me"; render(); });
+    case "addPick": S.add = null; return startPlacement(k, () => { S.view = "home"; render(); }, () => { S.view = "home"; render(); });
+    case "retest": return startPlacement(k, () => { S.view = "me"; render(); }, () => { S.view = "me"; render(); });
     case "saveBudget": { const v = parseFloat(($("#budget").value || "").replace(",", ".")); if (!(v > 0)) return toast("Wpisz kwotę większą od zera."); await saveProfile({ budget_usd: v }); toast("Limit zapisany."); return render(); }
     case "saveMe": {
       const name = $("#meName").value.trim() || P.name;
@@ -620,7 +708,8 @@ async function act(a, k, el) {
     case "logout": await sb.auth.signOut(); return;
 
     /* lekcja */
-    case "quit": stopSpeech(); S.L = null; S.view = "home"; toast("Lekcja przerwana. Zwroty z banku zostały zapisane."); return render();
+    case "quit": stopSpeech(); S.langView = L?.lang || S.langView; S.L = null; S.view = S.langView ? "lang" : "home"; toast("Lekcja przerwana. Zapisane zwroty zostają w banku."); render(); return scrollTop();
+    case "lessonDone": S.langView = L.lang; S.L = null; S.view = "lang"; render(); return scrollTop();
     case "introDone": L.introSeen = true; render(); return scrollTop();
     case "playPrev": return speak((L.prev?.lines || []).map(l => l.text).join(" "), L.lang);
     case "check": return checkCard();
@@ -634,9 +723,14 @@ async function act(a, k, el) {
     case "sayLine": { const i = +k; L.hl = i; render(); return speak(L.C.lines[i].text, L.lang, () => { L.hl = -1; render(); }); }
     case "trToggle": L.showTr[+k] = !L.showTr[+k]; return render();
     case "playAll": { let i = 0; const next = () => { if (i >= L.C.lines.length || S.view !== "lesson" || S.L !== L) { L.hl = -1; render(); return; } L.hl = i; render(); speak(L.C.lines[i].text, L.lang, () => { i++; next(); }); }; return next(); }
-    case "matNext": stopSpeech(); L.hl = -1; L.tip = null; L.step++; render(); return scrollTop();
+    case "matNext": stopSpeech(); L.hl = -1; L.tip = null; L.step++;
+      if (L.step === matSteps(L).gram && !L.gramSaved) { L.gramSaved = true; Learn.saveFromLesson(L); }
+      render(); return scrollTop();
+    case "matBack": stopSpeech(); L.hl = -1; L.tip = null; if (L.step > 0) L.step--; render(); return scrollTop();
+    case "actBack": L.stage = "mat"; L.step = matSteps(L).baro; render(); return scrollTop();
     case "baro": {
-      L.baro = el.dataset.l; const shift = Math.max(-3, Math.min(3, (S.langs[L.lang].difficulty_shift || 0) + Number(k)));
+      if (L.baroBase === undefined) L.baroBase = S.langs[L.lang].difficulty_shift || 0;
+      L.baro = el.dataset.l; const shift = Math.max(-3, Math.min(3, L.baroBase + Number(k)));
       if (shift !== S.langs[L.lang].difficulty_shift) { S.langs[L.lang].difficulty_shift = shift; sb.from("user_languages").update({ difficulty_shift: shift }).eq("id", S.langs[L.lang].id); }
       toast(k === "0" ? "Super, trzymamy poziom." : k === "1" ? "Następne lekcje będą trochę trudniejsze." : "Następne lekcje będą trochę łatwiejsze.");
       L.stage = "act"; render(); return scrollTop();
@@ -669,7 +763,8 @@ async function obNext() {
     if (!S.ob.sel.length) return toast("Wybierz co najmniej jeden język.");
     S.ob.idx = 0;
     const runNext = () => {
-      if (S.ob.idx < S.ob.sel.length) { const lang = S.ob.sel[S.ob.idx++]; return startPlacement(lang, runNext); }
+      while (S.ob.idx < S.ob.sel.length && S.langs[S.ob.sel[S.ob.idx]]) S.ob.idx++;   // poziom już ustalony
+      if (S.ob.idx < S.ob.sel.length) { const lang = S.ob.sel[S.ob.idx++]; return startPlacement(lang, runNext, () => { S.view = "ob"; S.ob.step = 8; render(); }); }
       S.view = "ob"; S.ob.step = 9; render();
       withBusy("Claude układa twój plan…", async () => { const r = await ai("plan", {}); S.ob.plan = r.plan; });
     };
@@ -682,15 +777,23 @@ async function obNext() {
   S.ob.step++; render(); scrollTop();
 }
 
+function plBack() {
+  const p = S.pl; if (!p) return;
+  if (p.step === "self") { const b = p.back; S.pl = null; if (b) b(); else { S.view = "home"; render(); } return scrollTop(); }
+  if (p.step === "q") { if (p.qi > 0) p.qi--; else p.step = "self"; }
+  else if (p.step === "write") { p.writing = $("#plWrite")?.value || p.writing; if (p.questions.length) { p.step = "q"; p.qi = p.questions.length - 1; } else p.step = "self"; }
+  render(); scrollTop();
+}
 async function plNext() {
   const p = S.pl;
   if (p.step === "self") {
     if (p.self === undefined) return toast("Wybierz jedną odpowiedź.");
     if (p.self === 0) return finishPlacement(22, "Zaczynasz od zera, więc startujemy od A1. Pierwsze lekcje będą krótkie i proste.");
+    if (p.questions.length && p.qSelf === p.self) { p.step = "q"; p.qi = 0; render(); return scrollTop(); }
     return withBusy("Claude przygotowuje krótki test…", async () => {
       const r = await ai("placement_questions", { lang: p.lang, self_score: SELF[p.self].s });
       p.questions = (r.questions || []).filter(q => Array.isArray(q.options)).slice(0, 5); p.writing_prompt = r.writing_prompt || "Napisz kilka zdań o sobie.";
-      p.step = p.questions.length ? "q" : "write"; p.qi = 0;
+      p.step = p.questions.length ? "q" : "write"; p.qi = 0; p.qSelf = p.self;
     });
   }
   if (p.step === "q") {
@@ -710,12 +813,13 @@ async function plNext() {
 
 /* --- Lekcja: start, karty, aktywacja, koniec --- */
 async function startLesson(lang, minutes) {
-  const topic = $("#srcTopic")?.value.trim() || "", source_url = $("#srcUrl")?.value.trim() || "", source_text = $("#srcText")?.value.trim() || "";
-  S.sheet = null; S.profile._lastTime = minutes;
+  const src = S.src || "auto", val = id => ($(id)?.value || "").trim();
+  const topic = src === "topic" ? val("#srcTopic") : "", source_url = src === "url" ? val("#srcUrl") : "", source_text = src === "text" ? val("#srcText") : "";
+  S.sheet = null; S.src = "auto"; S.profile._lastTime = minutes;
   const ul = S.langs[lang], first = (ul.lessons_done || 0) === 0;
   const n = TIMES.find(t => t.m === minutes).n;
   await withBusy("Claude układa twoją lekcję…", async () => {
-    const pool = S.bank.filter(b => b.lang === lang).sort((a, b) => (a.due <= day(0) ? 0 : 1) - (b.due <= day(0) ? 0 : 1) || a.strength - b.strength).slice(0, n);
+    const pool = S.bank.filter(b => b.lang === lang && b.introduced !== false).sort((a, b) => (a.due <= day(0) ? 0 : 1) - (b.due <= day(0) ? 0 : 1) || a.strength - b.strength).slice(0, n);
     const [lesson, review, prev] = await Promise.all([
       ai("lesson", { lang, minutes, topic, source_url, source_text }),
       !first && pool.length ? ai("review", { lang, chunks: pool.map(b => ({ chunk: b.chunk, meaning: b.meaning, context: b.context })) }) : Promise.resolve({ cards: [] }),
@@ -771,10 +875,11 @@ async function finishLesson() {
   await withBusy("Zapisuję postęp…", async () => {
     let score = ul.score;
     if (L.estimate) {
-      const est = Math.max(10, Math.min(90, L.estimate));
-      if ((ul.lessons_done || 0) < 5) score = Math.round(score + (est - score) * 0.4);      // kalibracja: w obie strony
-      else if (est > score) score = score + (est >= score + 8 ? 2 : 1);                     // potem tylko w górę
-      score = Math.max(22, Math.min(90, score));
+      // Poziom liczony z kilku lekcji: mediana z ostatnich 5 ocen, awans tylko gdy były co najmniej 2 różne tematy
+      const est = Math.max(10, Math.min(90, L.estimate)), topic = L.C.topic_tag || null;
+      (S.rated = S.rated || []).unshift({ lang: L.lang, topic, estimate: est });
+      score = Learn.nextScore(ul, S.rated.filter(r => r.lang === L.lang)).score;
+      sb.from("lessons").update({ estimate: est, topic }).eq("id", L.id).then(() => {}, () => {});
     }
     const before = band(ul.score)[0];
     ul.score = score; ul.lessons_done = (ul.lessons_done || 0) + 1;
@@ -821,7 +926,8 @@ async function onSession(session) {
   S.view = "loading"; render();
   await loadAll();
   if (!S.profile.onboarded) {
-    S.ob = { step: 0, sel: Object.keys(S.langs), self: {}, idx: 0 };
+    // Wznów tam, gdzie skończyłeś: jeśli profil był już zapisany, przejdź od razu do wyboru języków
+    S.ob = { step: S.profile.goal ? 8 : 0, sel: Object.keys(S.langs), self: {}, idx: 0 };
     S.profile.native = S.profile.native || "pl"; S.view = "ob";
   } else S.view = "home";
   render();
