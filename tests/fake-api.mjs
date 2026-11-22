@@ -17,6 +17,7 @@ export function fakeAnswer(a, body) {
     review: { cards: (body.chunks || []).map(c => ({ chunk: c.chunk, prompt_native: "Chętnie herbatę", before: "", after: "einen Tee.", answer: c.chunk })) },
     check: { ok: false, explanation: "Nie" },
     feedback: { praise: "Super", corrected: "Am Wochenende möchte ich gern spielen.", fixes: ["a"], more: [], new_chunks: [], mistake_note: "", score_estimate: 30, estimate_reason: "Proste zdania o codzienności." },
-    enrich: { words: (body.words || []).map(x => ({ chunk: x.chunk, meaning: x.meaning || "znaczenie " + x.chunk, pron: "PRON", ex: "Das ist {" + x.chunk + "} gut.", ex_pl: "To jest dobre.", tip: "wskazówka", fam: [] })) }
+    enrich: { words: (body.words || []).map(x => ({ chunk: x.chunk, meaning: x.meaning || "znaczenie " + x.chunk, pron: "PRON", ex: "Das ist {" + x.chunk + "} gut.", ex_pl: "To jest dobre.", ex_pron: "das IST " + x.chunk + " GUT", tip: "wskazówka", fam: [] })) },
+    pron: { items: (body.items || []).map(x => ({ chunk: x.chunk, pron: "PRON " + x.chunk, ex_pron: "ZDANIE " + x.chunk })) }
   }[a] || {};
 }

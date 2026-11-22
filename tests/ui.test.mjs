@@ -134,6 +134,8 @@ test("wygląd: bank słówek, gramatyka, przewodnik, zakładki", { skip }, async
   await click('[data-act="toLang"]'); await click('[data-act="openGuide"]'); await check("przewodnik");
   await click('[data-act="toLang"]'); await click('[data-act="tab"][data-k="home"]');
   for (const t of ["bank", "cost", "me"]) { await click(`[data-act="tab"][data-k="${t}"]`, 200); await check(`zakladka-${t}`); }
+  // O mnie jest długie: zrzuty niżej, po przewinięciu
+  for (const n of [1, 2]) { await page.evaluate(() => document.querySelector(".screen").scrollBy(0, 700)); await page.waitForTimeout(80); await check(`zakladka-me-${n}`); }
   await click('[data-act="openVoice"]', 200); await check("lektor");
   assert.deepEqual(errors, [], "błędy JavaScript na stronie");
 });

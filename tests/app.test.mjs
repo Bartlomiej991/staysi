@@ -125,7 +125,9 @@ test("bank słówek: dodawanie, lekcja, powtórka, lista", async () => {
   await click('[data-act="wAdd"]', 80);
   const fresh = db.bank.filter(b => b.introduced === false);
   assert.equal(fresh.length, 4); assert.ok(fresh.every(b => b.ex && b.pron), "karty uzupełnione przez Claude");
+  assert.ok(fresh.every(b => b.ex_pron), "jest wymowa całego zdania");
   await click('[data-act="wLesson"]', 60);
+  assert.match(text(), /wymowa: das IST/, "karta pokazuje wymowę zdania");
   await click('[data-act="wIntroNext"]'); await click('[data-act="wIntroBack"]');
   assert.match(text(), /Nowe słówko 1 z/, "cofanie między kartami");
   while ($('[data-act="wIntroNext"]')) await click('[data-act="wIntroNext"]', 5);
@@ -153,6 +155,12 @@ test("bank słówek: dodawanie, lekcja, powtórka, lista", async () => {
   assert.ok(fresh.some(b => b.strength === 2 && b.due > today()), "dobra odpowiedź wydłuża przerwę");
   await click('[data-act="wBack"]'); await click('[data-act="wList"]');
   assert.match(text(), /Wszystkie słówka/); assert.match(text(), /der Hund/);
+  // starsze słówko bez wymowy zdania: przycisk dopisuje ją jednym zapytaniem, zdanie zostaje
+  const old = fresh[0], ex = old.ex; old.ex_pron = ""; await click('[data-act="wBack"]'); await click('[data-act="wList"]');
+  assert.match(text(), /nie ma jeszcze zapisu wymowy/);
+  await click('[data-act="wPron"]', 80);
+  assert.equal(old.ex_pron, "ZDANIE " + old.chunk); assert.equal(old.ex, ex, "zdanie bez zmian");
+  assert.doesNotMatch(text(), /nie ma jeszcze zapisu wymowy/);
   await click('[data-act="wBack"]');
 });
 

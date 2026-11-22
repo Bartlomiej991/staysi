@@ -30,9 +30,31 @@ function sentence(w, mode) { // mode: gap | full | plain
 }
 const spk = (text, lang) => `<button class="spk" data-act="say" data-k="${C.esc(text)}" data-l="${lang}" aria-label="Odsłuchaj">${C.I.speaker}</button>`;
 
+let noExPron = false; // baza bez kolumny ex_pron (nie uruchomiono 006_wymowa_zdania.sql)
 async function save(w, fields) {
   Object.assign(w, fields);
-  if (w.id) { const { error } = await C.sb.from("bank").update(fields).eq("id", w.id); if (error) C.toast("Nie udało się zapisać postępu słówka."); }
+  if (!w.id) return;
+  if (noExPron) delete fields.ex_pron;
+  let { error } = await C.sb.from("bank").update(fields).eq("id", w.id);
+  if (error && "ex_pron" in fields && /ex_pron/.test(error.message || "")) {
+    noExPron = true; delete fields.ex_pron;
+    ({ error } = await C.sb.from("bank").update(fields).eq("id", w.id));
+  }
+  if (error) C.toast("Nie udało się zapisać postępu słówka.");
+}
+
+// Słówka z kartą, ale bez zapisu wymowy całej frazy i zdania (dodane przed tą zmianą)
+const needPron = list => list.filter(w => w.ex && !w.ex_pron);
+async function fillPron(lang, words) {
+  const need = needPron(words);
+  for (let i = 0; i < need.length; i += 15) {
+    const batch = need.slice(i, i + 15);
+    const r = await C.ai("pron", { lang, items: batch.map(w => ({ chunk: w.chunk, ex: w.ex })) });
+    for (const it of (r.items || [])) {
+      const w = batch.find(x => norm(x.chunk) === norm(it.chunk)) || batch[(r.items || []).indexOf(it)];
+      if (w && (it.pron || it.ex_pron)) await save(w, { pron: it.pron || w.pron || "", ex_pron: it.ex_pron || "" });
+    }
+  }
 }
 
 // Uzupełnia karty (zdanie, wymowa, wskazówka) dla słówek, które ich nie mają
@@ -43,7 +65,7 @@ async function enrich(lang, words) {
     const r = await C.ai("enrich", { lang, words: batch.map(w => ({ chunk: w.chunk, meaning: w.meaning, context: w.context })) });
     for (const card of (r.words || [])) {
       const w = batch.find(x => norm(x.chunk) === norm(card.chunk)) || batch[(r.words || []).indexOf(card)];
-      if (w) await save(w, { meaning: w.meaning || card.meaning || "", pron: card.pron || "", ex: card.ex || "", ex_pl: card.ex_pl || "", tip: card.tip || "", fam: Array.isArray(card.fam) ? card.fam : [] });
+      if (w) await save(w, { meaning: w.meaning || card.meaning || "", pron: card.pron || "", ex: card.ex || "", ex_pl: card.ex_pl || "", ex_pron: card.ex_pron || "", tip: card.tip || "", fam: Array.isArray(card.fam) ? card.fam : [] });
     }
   }
 }
@@ -58,7 +80,7 @@ function wordCard(w, lang, withEx = true) {
     <div class="row" style="align-items:flex-start"><div><div class="wen">${C.esc(w.chunk)}</div>${w.pron ? `<div class="wpron">wymowa: ${C.esc(w.pron)}</div>` : ""}</div>${spk(w.chunk, lang)}</div>
     <div class="wpl">${C.esc(w.meaning)}</div>
     ${famHtml(w, lang)}
-    ${withEx && (w.ex || w.context) ? `<div class="row" style="align-items:flex-start"><div style="flex:1"><div class="wex">${sentence(w, "full")}</div>${w.ex_pl ? `<div class="small muted">${C.esc(w.ex_pl)}</div>` : ""}</div>${spk(sentence(w, "plain"), lang)}</div>` : ""}
+    ${withEx && (w.ex || w.context) ? `<div class="row" style="align-items:flex-start"><div style="flex:1"><div class="wex">${sentence(w, "full")}</div>${w.ex_pron ? `<div class="wpron">wymowa: ${C.esc(w.ex_pron)}</div>` : ""}${w.ex_pl ? `<div class="small muted">${C.esc(w.ex_pl)}</div>` : ""}</div>${spk(sentence(w, "plain"), lang)}</div>` : ""}
     ${w.tip ? `<div class="wtip">${C.esc(w.tip)}</div>` : ""}
   </div>`;
 }
@@ -120,7 +142,7 @@ async function startSession(kind) {
   if (kind === "review") { items = shuffle(due(lang)); title = "Powtórka"; }
   if (kind === "train") { items = shuffle(learned(lang)).slice(0, 10); title = "Trening"; }
   if (!items.length) return C.toast("Nie ma tu teraz żadnych słówek.");
-  const ok = await C.withBusy("Przygotowuję karty słówek…", async () => { await enrich(lang, items); return true; });
+  const ok = await C.withBusy("Przygotowuję karty słówek…", async () => { await enrich(lang, items); try { await fillPron(lang, items); } catch (e) { console.warn("wymowa", e); } return true; });
   if (!ok) return;
   const T = typesFor(lang);
   let queue;
@@ -208,9 +230,11 @@ async function finish() {
 export function renderList() {
   const S = C.S, lang = S.langView, q = norm(S.wSearch || "");
   const items = all(lang).filter(w => !q || norm(w.chunk).includes(q) || norm(w.meaning).includes(q));
+  const np = needPron(all(lang)).length;
   return `<div class="screen bg-ground"><div class="row"><h2>Wszystkie słówka</h2><button class="chip" data-act="wBack">Wróć</button></div>
+    ${np ? `<div class="tip"><b>${np} ${np === 1 ? "słówko nie ma" : "słówek nie ma"} jeszcze zapisu wymowy całej frazy i zdania.</b><br><button class="linkbtn" data-act="wPron">Uzupełnij wymowę</button> <span class="small muted">jedno szybkie zapytanie, ułamek centa</span></div>` : ""}
     <input class="field" type="search" id="wSearch" value="${C.esc(S.wSearch || "")}" placeholder="Szukaj po polsku lub w języku nauki" style="border:2px solid var(--line)">
-    <div class="card">${items.map(w => `<div class="row"><div><b>${C.esc(w.chunk)}</b> · <span class="muted">${C.esc(w.meaning)}</span><br><span class="small muted">${w.introduced === false ? "nowe" : w.due <= C.day(0) ? "do powtórki dziś" : "powtórka " + C.esc(w.due)}</span></div>
+    <div class="card">${items.map(w => `<div class="row"><div><b>${C.esc(w.chunk)}</b> · <span class="muted">${C.esc(w.meaning)}</span>${w.pron ? `<br><span class="wpron">${C.esc(w.pron)}</span>` : ""}<br><span class="small muted">${w.introduced === false ? "nowe" : w.due <= C.day(0) ? "do powtórki dziś" : "powtórka " + C.esc(w.due)}</span></div>
       <div style="display:flex;gap:8px;align-items:center"><span class="strength">${[1, 2, 3, 4, 5].map(i => `<i class="${i <= (w.introduced === false ? 0 : w.strength) ? "on" : ""}"></i>`).join("")}</span>${spk(w.chunk, lang)}</div></div>`).join('<div class="divider"></div>') || "<p>Nic nie znaleziono.</p>"}</div></div>`;
 }
 
@@ -223,6 +247,9 @@ export async function act(a, k) {
     case "wReview": await startSession("review"); return true;
     case "wTrain": await startSession("train"); return true;
     case "wList": S.wSearch = ""; S.view = "wlist"; C.render(); C.scrollTop(); return true;
+    case "wPron": { const lang = S.langView;
+      await C.withBusy("Dopisuję wymowę…", async () => { await fillPron(lang, all(lang)); });
+      C.toast(needPron(all(lang)).length ? "Część wymowy nie zapisała się. Spróbuj jeszcze raz." : "Wymowa uzupełniona."); C.render(); return true; }
     case "wBack": case "wQuit": S.W = null; S.view = "lang"; C.render(); C.scrollTop(); return true;
     case "wAdd": {
       const lang = S.langView, ctx = (document.querySelector("#newCtx")?.value || "").trim();

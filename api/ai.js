@@ -242,6 +242,19 @@ Return JSON {"praise": string, "corrected": improved natural version in ${L} (of
       return send(res, 200, out);
     }
 
+    // Wymowa dla słówek, które mają już kartę: frazę i jej zdanie zostawiamy bez zmian, dochodzi tylko zapis wymowy.
+    if (action === "pron") {
+      await checkLimits(db, uid, action);
+      const L = LANG[body.lang];
+      const items = (body.items || []).slice(0, 15).map(w => ({ chunk: String(w.chunk || "").slice(0, 80), ex: String(w.ex || "").replace(/[{}]/g, "").slice(0, 300) })).filter(w => w.chunk);
+      if (!items.length) return send(res, 200, { items: [] });
+      const parsed = await claudeJson(db, { userId: uid, purpose: "pron", lang: body.lang, maxTokens: 300 + items.length * 160,
+        messages: [{ role: "user", content: `For each ${L} item and its example sentence, write the pronunciation for a ${native} speaker: ${native} spelling, syllables separated by hyphens, stressed syllable in CAPITALS, words separated by spaces (e.g. ish MESH-te GERN). Cover every word.
+Items: ${JSON.stringify(items)}
+Return JSON {"items":[{"chunk": the item exactly as given, "pron": pronunciation of the whole item, "ex_pron": pronunciation of the whole sentence, "" if the sentence is empty}]}` }] });
+      return send(res, 200, { items: Array.isArray(parsed.items) ? parsed.items : [] });
+    }
+
     if (action === "enrich") {
       await checkLimits(db, uid, action);
       const L = LANG[body.lang];
@@ -261,9 +274,10 @@ Items: ${JSON.stringify(words)}
 Return JSON {"words":[{
  "chunk": the item exactly as given (fix only obvious typos),
  "meaning": short meaning in ${native} (1-4 words, several separated by commas if needed),
- "pron": pronunciation for a ${native} speaker written with ${native} spelling, syllables separated by hyphens, stressed syllable in CAPITALS (e.g. KE-rek-ter), "" if obvious,
+ "pron": pronunciation of the WHOLE item for a ${native} speaker (every word of a phrase, words separated by spaces), written with ${native} spelling, syllables separated by hyphens, stressed syllable in CAPITALS (e.g. KE-rek-ter, ish MESH-te GERN), never empty,
  "ex": one natural ${L} example sentence at the learner's level where the item appears wrapped in curly braces exactly once, e.g. "My brother has a strong {character}." (inflect inside the braces if grammar needs it),
  "ex_pl": that sentence translated to ${native},
+ "ex_pron": pronunciation of the whole example sentence (without the braces) in the same style as pron,
  "tip": one short tip in ${native}: if the item is or contains an irregular verb or an irregular plural or form, the tip MUST show its key forms (e.g. "gehen – ging – gegangen", "go – went – gone", "das Buch – die Bücher"); otherwise a short grammar note, false friend warning or memory tip, or "",
  "fam": [[related word, part of speech abbreviation in ${native}, meaning in ${native}, pronunciation like pron]] with 0-3 entries from the same word family or the opposite, [] if none
 }]}` }] });

@@ -35,7 +35,7 @@ const TIMES = [
   { m: 45, l: "Pełny trening", bg: "transparent", fg: "inherit", n: 12 }
 ];
 const INTERVAL = [1, 1, 3, 7, 14, 30]; // dni do następnej powtórki według siły zwrotu
-const PURPOSE = { lesson: "Lekcja", review: "Karty powtórki", check: "Sprawdzenie odpowiedzi", feedback: "Poprawki", placement: "Test poziomu", plan: "Plan nauki", vocative: "Forma imienia", photo: "Zdjęcie strony", enrich: "Karty słówek", lesson_edit: "Redakcja tłumaczenia", tts: "Lektor" };
+const PURPOSE = { lesson: "Lekcja", review: "Karty powtórki", check: "Sprawdzenie odpowiedzi", feedback: "Poprawki", placement: "Test poziomu", plan: "Plan nauki", vocative: "Forma imienia", photo: "Zdjęcie strony", enrich: "Karty słówek", lesson_edit: "Redakcja tłumaczenia", pron: "Wymowa słówek", tts: "Lektor" };
 
 /* ================= Ikony ================= */
 const I = {
@@ -79,7 +79,7 @@ const nextBand = s => BANDS[Math.min(BANDS.indexOf(band(s)) + 1, BANDS.length - 
 const modeOf = s => (s < 43 ? "A" : s < 76 ? "B" : "C");
 const day = (offset = 0) => { const d = new Date(); d.setDate(d.getDate() + offset); return d.toLocaleDateString("sv-SE"); };
 const quote = () => QUOTES[Math.floor(Math.random() * QUOTES.length)];
-const usd = v => (v < 0.01 ? "$" + v.toFixed(4) : "$" + v.toFixed(2));
+const usd = v => (v > 0 && v < 0.01 ? "$" + v.toFixed(4) : "$" + v.toFixed(2));
 const uid = () => S.session?.user?.id;
 const greetName = () => S.profile?.name_vocative || S.profile?.name || "poligloto";
 function loadLocal(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch { return d; } }
@@ -443,11 +443,12 @@ function renderPlacement() {
 
 /* --- Główne zakładki --- */
 function renderMain() {
+  if (S.view === "cost" && !S.owner) S.view = "home";
   const v = S.view, cls = v === "home" ? "bg-indigo" : v === "cost" ? "bg-ink" : "bg-ground";
   const body = v === "home" ? renderHome() : v === "bank" ? renderBank() : v === "cost" ? renderCost() : renderMe();
   return `<div class="screen ${cls}">${body}</div>
   <div class="${cls}"><nav class="nav">${[["home", I.home, "Start"], ["bank", I.book, "Słówka"], ["cost", I.wallet, "Koszty"], ["me", I.user, "O mnie"]]
-    .map(([k, ic, l]) => `<button class="${v === k ? "on" : ""}" data-act="tab" data-k="${k}" ${v === k ? 'aria-current="page"' : ""}>${ic}${l}</button>`).join("")}</nav></div>`;
+    .filter(([k]) => k !== "cost" || S.owner).map(([k, ic, l]) => `<button class="${v === k ? "on" : ""}" data-act="tab" data-k="${k}" ${v === k ? 'aria-current="page"' : ""}>${ic}${l}</button>`).join("")}</nav></div>`;
 }
 function renderHome() {
   const langs = Object.values(S.langs).sort((a, b) => (todayDone(a.lang) ? 1 : 0) - (todayDone(b.lang) ? 1 : 0));
@@ -487,28 +488,54 @@ function renderBank() {
   return `<h2>Twoje zwroty</h2><p class="small muted">Słupki to siła zwrotu w pamięci. Im silniejszy, tym rzadziej wraca.</p>${groups || `<div class="card"><p>Bank jest pusty. Stukaj w zakreślone zwroty w lekcjach, a pojawią się tutaj.</p></div>`}`;
 }
 
+// Grupy kosztów: zamiast nazw modeli pokazujemy, na co poszły pieniądze
+const COST_GROUPS = [
+  ["Lekcje", ["lesson", "lesson_edit", "review", "photo"]],
+  ["Poprawki mówienia", ["feedback", "check"]],
+  ["Słówka", ["enrich", "pron"]],
+  ["Test poziomu i plan", ["placement", "plan", "vocative"]]
+];
+const modelName = m => (m || "").includes("opus") ? "Opus" : (m || "").includes("sonnet") ? "Sonnet" : "Haiku";
 function renderCost() {
-  const all = S.usage, total = all.reduce((a, c) => a + Number(c.cost_usd), 0);
+  const all = S.usage.filter(c => c.purpose !== "tts"), sum = l => l.reduce((a, c) => a + Number(c.cost_usd), 0), total = sum(all);
   const budget = Number(S.profile.budget_usd || 5), share = Math.min(100, total / budget * 100);
-  const today = all.filter(c => new Date(c.created_at).toLocaleDateString("sv-SE") === day(0)).reduce((a, c) => a + Number(c.cost_usd), 0);
-  const lessons = all.filter(c => c.purpose === "lesson").length;
-  const avg = lessons ? total / lessons : 0;
-  const models = {}; all.forEach(c => { if (c.purpose === "tts") return; const m = c.model.includes("opus") ? "Claude Opus 5.5" : c.model.includes("sonnet") ? "Claude Sonnet 5.5" : "Claude Haiku 5.5"; models[m] = models[m] || { n: 0, v: 0, t: 0 }; models[m].n++; models[m].v += Number(c.cost_usd); models[m].t += c.input_tokens + c.output_tokens; });
-  const langs = Object.keys(S.langs).map(k => ({ k, v: all.filter(c => c.lang === k).reduce((a, c) => a + Number(c.cost_usd), 0), n: all.filter(c => c.lang === k && c.purpose === "lesson").length }));
+  const now = new Date(), dom = now.getDate(), dim = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+  const forecast = total / dom * dim, today = sum(all.filter(c => new Date(c.created_at).toLocaleDateString("sv-SE") === day(0)));
+  const lessons = S.usage.filter(c => c.purpose === "lesson").length;
+  const groups = COST_GROUPS.map(([name, ps]) => { const l = all.filter(c => ps.includes(c.purpose)); return { name, n: l.length, v: sum(l) }; }).filter(g => g.n);
+  const other = all.filter(c => !COST_GROUPS.some(([, ps]) => ps.includes(c.purpose)));
+  if (other.length) groups.push({ name: "Inne", n: other.length, v: sum(other) });
+  const maxG = Math.max(0.000001, ...groups.map(g => g.v));
+  const langs = Object.keys(S.langs).map(k => { const l = all.filter(c => c.lang === k); return { k, v: sum(l), n: S.usage.filter(c => c.lang === k && c.purpose === "lesson").length }; }).filter(l => l.v > 0 || l.n);
   const maxL = Math.max(0.000001, ...langs.map(l => l.v));
-  const month = new Date().toLocaleDateString("pl-PL", { month: "long" });
-  return `<div class="blob" style="width:240px;height:240px;background:var(--ink-2);top:-90px;right:-90px"></div>
-  <span class="logo" style="position:relative">Koszty · ${esc(month)}</span>
-  <div style="position:relative;display:flex;flex-direction:column;gap:10px"><span class="big-num">${usd(total)}</span>
-    <div class="bar"  aria-hidden="true"><i style="width:${share}%;background:${share >= 80 ? "var(--red)" : "var(--mint)"}"></i></div>
-    <span class="small soft-2">${Math.round(share)}% z limitu ${usd(budget)}${share >= 80 ? " · zbliżasz się do limitu" : ""}</span></div>
-  <div class="chips"><span class="chip" >Dziś ${usd(today)}</span><span class="chip" >Lekcja śr. ${lessons ? usd(avg) : "–"}</span><span class="chip" >Lektor ${Math.round(all.filter(c => c.purpose === "tts").reduce((a, c) => a + (c.input_tokens || 0), 0) / 1000)} tys. znaków z 1 mln gratis</span></div>
-  <div class="card"><h3>Według modelu</h3>${Object.keys(models).length ? Object.entries(models).map(([m, x]) => `<div class="row"><span><b>${m}</b><br><span class="small soft-2">${x.n} zapytań · ${(x.t / 1000).toFixed(1)}k tokenów</span></span><b class="tabnum">${usd(x.v)}</b></div>`).join('<div class="divider"></div>') : '<p class="soft-2">Jeszcze nic.</p>'}</div>
-  <div class="card"><h3>Według języka</h3>${langs.map(l => `<div class="row small"><span>${LANGS[l.k].name} · ${l.n} lekcji</span><b class="tabnum">${usd(l.v)}</b></div><div class="bar" style="height:8px"><i style="width:${l.v / maxL * 100}%;background:var(--sun)"></i></div>`).join("")}</div>
-  <div class="card"><h3>Historia</h3>${all.filter(c => c.purpose !== "tts").slice(0, 15).map(c => `<div class="row small"><span>${esc(PURPOSE[c.purpose] || c.purpose)}${c.lang ? " · " + esc(LANGS[c.lang]?.name || c.lang) : ""}<br><span class="soft-2">${new Date(c.created_at).toLocaleString("pl-PL", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</span></span><b class="tabnum">${usd(Number(c.cost_usd))}</b></div>`).join("") || '<p class="soft-2">Jeszcze nic.</p>'}</div>
-  <div class="card"><label class="f">Miesięczny limit (USD)<input class="field" type="text" inputmode="decimal" id="budget" value="${esc(budget)}"></label>
-    <button class="btn btn-sun" data-act="saveBudget" style="font-size:16px;padding:12px">Zapisz limit</button>
-    <p class="small soft-2">Po przekroczeniu limitu serwer wstrzymuje zapytania do Claude do końca miesiąca albo do zmiany limitu.</p></div>`;
+  const chars = S.usage.filter(c => c.purpose === "tts").reduce((a, c) => a + (c.input_tokens || 0), 0);
+  const month = now.toLocaleDateString("pl-PL", { month: "long" });
+  const barRow = (label, sub, v, max) => `<div class="crow"><div class="row"><span>${label}${sub ? `<br><span class="small muted">${sub}</span>` : ""}</span><b class="tabnum">${usd(v)}</b></div><div class="bar thin" aria-hidden="true"><i style="width:${Math.round(v / max * 100)}%"></i></div></div>`;
+  return `<div><h1>Koszty</h1><p class="muted">${esc(month[0].toUpperCase() + month.slice(1))} · widzisz to tylko Ty</p></div>
+  <section class="sec sec-main">
+    <div><span class="big-num">${usd(total)}</span> <span class="muted">z ${usd(budget)}</span></div>
+    <div class="bar" aria-hidden="true"><i style="width:${share}%;${share >= 80 ? "background:var(--bad)" : ""}"></i></div>
+    <p class="small ${share >= 80 ? "" : "muted"}">${share >= 100 ? "Limit wyczerpany. Lekcje ruszą po zmianie limitu albo od nowego miesiąca." : `Zostało ${usd(Math.max(0, budget - total))}.${total > 0 ? ` W tym tempie do końca miesiąca wyjdzie ok. ${usd(forecast)}${forecast > budget ? ", czyli ponad limit" : ""}.` : ""}`}</p>
+    <div class="wstats"><div><b>${usd(today)}</b><span>dziś</span></div><div><b>${lessons}</b><span>lekcji</span></div><div><b>${lessons ? usd(total / lessons) : "–"}</b><span>na lekcję</span></div></div>
+  </section>
+  <section class="sec"><h2>Na co idą pieniądze</h2>
+    ${groups.length ? groups.map(g => barRow(g.name, `${g.n} ${g.n === 1 ? "zapytanie" : g.n < 5 ? "zapytania" : "zapytań"}`, g.v, maxG)).join("") : '<p class="muted">Jeszcze nic w tym miesiącu.</p>'}
+  </section>
+  ${langs.length ? `<section class="sec"><h2>Według języka</h2>${langs.map(l => barRow(LANGS[l.k].name, `${l.n} ${l.n === 1 ? "lekcja" : l.n < 5 ? "lekcje" : "lekcji"}`, l.v, maxL)).join("")}</section>` : ""}
+  <section class="sec"><h2>Lektor Google</h2>
+    <div class="row"><span>${Math.round(chars / 1000)} tys. znaków z 1 mln za darmo</span><b class="tabnum">$0</b></div>
+    <div class="bar thin" aria-hidden="true"><i style="width:${Math.min(100, chars / 10000)}%"></i></div>
+  </section>
+  <section class="sec">
+    <details class="more"><summary>Ostatnie zapytania</summary>
+      ${all.slice(0, 20).map(c => `<div class="row small"><span>${esc(PURPOSE[c.purpose] || c.purpose)}${c.lang ? " · " + esc(LANGS[c.lang]?.name || c.lang) : ""}<br><span class="muted">${new Date(c.created_at).toLocaleString("pl-PL", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })} · ${modelName(c.model)}</span></span><b class="tabnum">${usd(Number(c.cost_usd))}</b></div>`).join('<div class="divider"></div>') || '<p class="muted">Jeszcze nic.</p>'}
+    </details>
+    <details class="more"><summary>Miesięczny limit: ${usd(budget)}</summary>
+      <label class="f">Nowy limit (USD)<input class="field" type="text" inputmode="decimal" id="budget" value="${esc(budget)}"></label>
+      <button class="btn btn-ghost" data-act="saveBudget">Zapisz limit</button>
+      <p class="small muted">Po przekroczeniu limitu serwer wstrzymuje zapytania do Claude do końca miesiąca albo do zmiany limitu.</p>
+    </details>
+  </section>`;
 }
 
 /* --- Ekran ustawień lektora: jeden dla wszystkich języków --- */
@@ -537,31 +564,33 @@ function renderVoice() {
 }
 function renderMe() {
   const P = S.profile;
-  return `<h2>O mnie</h2>
-  <div class="card">
+  return `<h1>O mnie</h1>
+  <section class="sec"><h2>Profil</h2>
     <label class="f">Imię<input class="field" type="text" id="meName" value="${esc(P.name)}"></label>
     <label class="f">Czym się zajmujesz?<input class="field" type="text" id="meJob" value="${esc(P.job)}"></label>
     <label class="f">Gdzie mieszkasz?<input class="field" type="text" id="meCity" value="${esc(P.city)}"></label>
     <label class="f">Coś o tobie<textarea class="field" id="meAbout">${esc(P.about)}</textarea></label>
-    <label class="f">Uwagi dla Claude'a<textarea class="field" id="meNotes" placeholder="np. dialogi mają brzmieć jak prawdziwa rozmowa znajomych, potocznie, bez przedstawiania się">${esc(P.style_notes || "")}</textarea></label>
-    <p class="small muted" style="margin-top:-6px">Claude czyta to przed każdą lekcją. To, co wpiszesz po lekcji w „Co poprawić?”, też tu trafia.</p>
-    <div><p class="small" style="font-weight:700;margin-bottom:6px">Zainteresowania</p><div class="chips">${[...new Set([...INTERESTS, ...(P.interests || [])])].map(i => `<button class="chip ${(P.interests || []).includes(i) ? "sel" : ""}" data-act="interest" data-k="${esc(i)}">${esc(i)}</button>`).join("")}</div></div>
-    <div><p class="small" style="font-weight:700;margin-bottom:6px">Cel nauki</p><div class="chips">${[...new Set([...GOALS, ...goalList()])].map(g => `<button class="chip ${goalList().includes(g) ? "sel" : ""}" data-act="goal" data-k="${esc(g)}">${esc(g)}</button>`).join("")}</div></div>
     <label class="f">Język ojczysty<select class="field" id="meNative">${Object.entries(LANGS).map(([k, v]) => `<option value="${k}" ${P.native === k ? "selected" : ""}>${v.name}</option>`).join("")}</select></label>
-    <button class="btn btn-indigo" data-act="saveMe" style="font-size:16px;padding:13px">Zapisz zmiany</button>
-  </div>
-  <div class="card"><h3>Języki i poziomy</h3>${Object.values(S.langs).map(l => `<div class="row"><span>${LANGS[l.lang].name} · <b>${band(l.score)[0]}</b> <span class="small muted">(${l.score} pkt)</span></span><button class="chip" data-act="retest" data-k="${l.lang}">Powtórz test</button></div>`).join('<div class="divider"></div>')}
-    <button class="chip" data-act="addLang" style="align-self:flex-start">+ Dodaj język</button></div>
-  <div class="card"><div class="row"><span><h3>Lektor</h3><span class="small muted">${S.cloud && !S.cloudOff ? `Google · ${cloudName("f")} i ${cloudName("m")}` : "Głos z telefonu"} · tempo ${Math.round(S.rate * 100)}%</span></span>
-    <button class="chip" data-act="openVoice">Ustawienia ›</button></div></div>
-  <div class="card"><h3>Przypomnienia</h3>
+  </section>
+  <section class="sec"><h2>Dla Claude'a</h2>
+    <label class="f">Uwagi do lekcji<textarea class="field" id="meNotes" placeholder="np. dialogi mają brzmieć jak prawdziwa rozmowa znajomych, potocznie, bez przedstawiania się">${esc(P.style_notes || "")}</textarea></label>
+    <p class="small muted" style="margin-top:-6px">Claude czyta to przed każdą lekcją. To, co wpiszesz po lekcji w „Co poprawić?”, też tu trafia.</p>
+    <div><p class="flabel">Zainteresowania</p><div class="chips">${[...new Set([...INTERESTS, ...(P.interests || [])])].map(i => `<button class="chip ${(P.interests || []).includes(i) ? "sel" : ""}" data-act="interest" data-k="${esc(i)}">${esc(i)}</button>`).join("")}</div></div>
+    <div><p class="flabel">Cel nauki</p><div class="chips">${[...new Set([...GOALS, ...goalList()])].map(g => `<button class="chip ${goalList().includes(g) ? "sel" : ""}" data-act="goal" data-k="${esc(g)}">${esc(g)}</button>`).join("")}</div></div>
+    <button class="btn btn-sun" data-act="saveMe" style="font-size:16px;padding:13px">Zapisz zmiany</button>
+  </section>
+  <section class="sec"><h2>Języki i poziomy</h2>${Object.values(S.langs).map(l => `<div class="row"><span>${LANGS[l.lang].name} · <b>${band(l.score)[0]}</b> <span class="small muted">(${l.score} pkt)</span></span><button class="chip" data-act="retest" data-k="${l.lang}">Powtórz test</button></div>`).join('<div class="divider"></div>')}
+    <button class="chip" data-act="addLang" style="align-self:flex-start">+ Dodaj język</button></section>
+  <section class="sec"><div class="row"><span><h2>Lektor</h2><span class="small muted">${S.cloud && !S.cloudOff ? `Google · ${cloudName("f")} i ${cloudName("m")}` : "Głos z telefonu"} · tempo ${Math.round(S.rate * 100)}%</span></span>
+    <button class="chip" data-act="openVoice">Ustawienia ›</button></div></section>
+  <section class="sec"><h2>Przypomnienia</h2>
     <div class="row"><span>Codzienne przypomnienie</span><button class="toggle ${P.remind ? "on" : ""}" data-act="remind" aria-label="Przypomnienia" aria-pressed="${P.remind}"></button></div>
     <label class="f">Godzina<input class="field" type="time" id="remAt" value="${esc(P.remind_at)}"></label>
-    <p class="small muted">Powiadomienia na telefon dojdą w kolejnej wersji. Godzina jest już zapisywana.</p></div>
-  <div class="card"><h3>O metodzie</h3>
+    <p class="small muted">Powiadomienia na telefon dojdą w kolejnej wersji. Godzina jest już zapisywana.</p></section>
+  <section class="sec"><h2>O metodzie</h2>
     <p>STAYSI opiera się na metodzie Luki Lampariello, włoskiego poligloty i trenera językowego. Każda lekcja łączy trzy filary: powtórkę (zwroty wracają w odpowiednim momencie), nowy materiał (ciekawe i zrozumiałe treści, około 85–90% znanych słów) i mówienie od pierwszego dnia.</p>
     <p><a href="https://lucalampariello.com" target="_blank" rel="noopener">Strona Luki</a> · <a href="https://www.youtube.com/@lucalampariello" target="_blank" rel="noopener">Kanał na YouTube</a></p>
-    <p class="small muted">STAYSI jest inspirowana jego metodą i nie jest z nim oficjalnie powiązana.</p></div>
+    <p class="small muted">STAYSI jest inspirowana jego metodą i nie jest z nim oficjalnie powiązana.</p></section>
   <button class="btn btn-ghost" data-act="logout" style="color:var(--mu)">Wyloguj się</button>`;
 }
 
@@ -843,7 +872,7 @@ async function act(a, k, el) {
   if (["toLang", "openGrammar", "openGuide", "gToggle"].includes(a)) { if (await Learn.act(a, k)) return; }
   switch (a) {
     case "authMode": S.auth = { mode: S.auth.mode === "login" ? "register" : "login", msg: "" }; return render();
-    case "tab": S.view = k; render(); return scrollTop();
+    case "tab": S.view = k === "cost" && !S.owner ? "home" : k; render(); return scrollTop();
     case "say": return speak(k, el.dataset.l);
     case "mic": return dictate(k, S.W?.lang || L?.lang || S.pl?.lang || S.langView || "en", el);
 
@@ -1136,15 +1165,24 @@ async function boot() {
   let cfg;
   try { cfg = await (await fetch("/api/config")).json(); } catch { cfg = {}; }
   if (!cfg.supabaseUrl || !cfg.supabaseAnonKey) { S.view = "setup"; return render(); }
-  S.cloud = !!cfg.cloudVoice;
+  S.cloud = !!cfg.cloudVoice; S.ownerHash = cfg.ownerHash || "";
   sb = createClient(cfg.supabaseUrl, cfg.supabaseAnonKey);
   const { data } = await sb.auth.getSession();
   await onSession(data.session);
   sb.auth.onAuthStateChange((_e, session) => { if ((session?.user?.id || null) !== (S.session?.user?.id || null)) onSession(session); });
 }
+// Koszty widzi tylko właściciel (skrót jego adresu przychodzi z /api/config)
+async function checkOwner(email) {
+  if (!S.ownerHash) return true;
+  try {
+    const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(String(email || "").trim().toLowerCase()));
+    return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, "0")).join("") === S.ownerHash;
+  } catch { return false; }
+}
 async function onSession(session) {
   S.session = session;
   if (!session) { S.view = "auth"; return render(); }
+  S.owner = await checkOwner(session.user?.email);
   S.view = "loading"; render();
   await loadAll();
   if (!S.profile.onboarded) {

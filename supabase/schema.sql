@@ -176,3 +176,6 @@ create index if not exists lessons_rated_idx on public.lessons (user_id, lang, c
 
 -- Uwagi dla Claude'a (to samo co 005_uwagi.sql)
 alter table public.profiles add column if not exists style_notes text not null default '';
+
+-- 006: wymowa zdania przy słówku
+alter table public.bank add column if not exists ex_pron text not null default '';

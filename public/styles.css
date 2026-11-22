@@ -457,3 +457,32 @@ details.addw[open]{display:flex;flex-direction:column;gap:14px}
 .lhead .scene{top:40px;right:-10px}
 .screen>*:not(.scene),.lhead>*:not(.scene),.bubble.lang>*:not(.scene){position:relative;z-index:1}
 @media (prefers-reduced-motion:no-preference){.scene{animation:sceneIn .6s ease-out both}@keyframes sceneIn{from{opacity:0;transform:translateY(6px)}}}
+/* Koszty */
+.crow{display:flex;flex-direction:column;gap:6px;padding:6px 0}
+.bar.thin{height:5px}
+.sec-main .big-num{font-size:48px}
+details.more{display:flex;flex-direction:column;gap:12px}
+details.more>summary{font-size:16px;font-weight:600;color:var(--tx);padding:6px 0}
+details.more[open]>summary{margin-bottom:10px}
+.nav,.bg-ink .nav{grid-template-columns:none;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr)}
+
+/* --- Czytelne pola i przyciski do wyboru (O mnie, Lektor, formularze) --- */
+:root{--field:#20332A;--ln2:#41594C}
+.field{background:var(--field);border:1.5px solid var(--ln2)!important;color:var(--tx)}
+.field:focus{border-color:var(--g)!important;outline:none;box-shadow:0 0 0 3px rgba(111,211,156,.22)}
+.field::placeholder{color:#8FA397}
+select.field{appearance:none;-webkit-appearance:none;padding-right:44px;cursor:pointer;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%236FD39C' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 16px center}
+select.field option{background:#1A2B22;color:var(--tx)}
+input[type=time].field{color-scheme:dark}
+label.f,.flabel{font-size:15px;font-weight:600;color:var(--tx);margin:0 0 8px}
+/* niewybrane: wyraźna ramka; wybrane: wypełnione na zielono (chipy) albo zielona ramka z tłem (większe kafle) */
+.opt,.bg-ground .opt,.chip,.bg-ground .chip,.wbtn,.tile,.vchip,.src,.baro button,.time{border:1.5px solid var(--ln2)!important}
+.chip{padding:9px 15px;font-weight:600}
+.chip.sel{background:var(--g)!important;color:var(--g-on)!important;border-color:var(--g)!important;box-shadow:none}
+.opt.sel,.vchip.sel,.src.sel,.time.sel{background:rgba(111,211,156,.13)!important;border-color:var(--g)!important;box-shadow:none}
+.vchip.sel svg{color:var(--g)}
+.toggle{background:var(--ln2);border:0}
+.toggle.on{background:var(--g)} .toggle.on::after{background:var(--g-on)}
+.btn-ghost,.pillbtn,.backbtn{border:1.5px solid var(--ln2)}

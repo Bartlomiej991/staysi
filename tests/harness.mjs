@@ -31,13 +31,13 @@ function table(name) {
     } };
   return st;
 }
-const sbStub = { from: table, auth: { getSession: async () => ({ data: { session: { user: { id: "u1" }, access_token: "t" } } }), onAuthStateChange() {}, signOut: async () => {} } };
+const sbStub = { from: table, auth: { getSession: async () => ({ data: { session: { user: { id: "u1", email: globalThis.__email || "test@staysi" }, access_token: "t" } } }), onAuthStateChange() {}, signOut: async () => {} } };
 
 import { LESSON, fakeAnswer } from "./fake-api.mjs";
 export { LESSON };
 
 async function fakeApi(url, opt = {}) {
-  if (url === "/api/config") return { ok: true, json: async () => ({ supabaseUrl: "x", supabaseAnonKey: "y", cloudVoice: !!globalThis.__cloud }) };
+  if (url === "/api/config") return { ok: true, json: async () => ({ supabaseUrl: "x", supabaseAnonKey: "y", cloudVoice: !!globalThis.__cloud, ownerHash: globalThis.__ownerHash || "" }) };
   if (url === "/api/tts") { ttsBodies.push(JSON.parse(opt.body)); return { ok: true, blob: async () => new Blob(["mp3"]), json: async () => ({}) }; }
   const body = JSON.parse(opt.body), a = body.action; apiCalls.push(a); bodies.push(body);
   const out = fakeAnswer(a, body);
