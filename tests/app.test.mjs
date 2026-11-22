@@ -37,7 +37,7 @@ test("test poziomu: cofanie, zero i krótki test", async () => {
   assert.match(text(), /A1/);
   await click('[data-act="plDone"]', 30);
   await click('[data-act="plSelf"][data-k="3"]'); await click('[data-act="plNext"]', 40);
-  assert.match(text(), /TEST · 1/);
+  assert.match(text(), /Test · 1/);
   await click('[data-act="plBack"]'); await click('[data-act="plNext"]', 40);
   assert.equal(apiCalls.filter(a => a === "placement_questions").length, 1, "po cofnięciu pytania nie są pobierane drugi raz");
   await click('[data-act="plAns"][data-k="0"]'); await click('[data-act="plNext"]');
@@ -73,24 +73,24 @@ test("pierwsza lekcja: bez powtórki, gramatyka, barometr, mówienie", async () 
   await type("#srcTopic", "rozmowa o pracę");
   await click('[data-act="time"][data-k="15"]', 80);
   assert.equal(bodies.filter(b => b.action === "lesson").at(-1).topic, "rozmowa o pracę", "temat trafia do Claude'a");
-  assert.match(text(), /KROK 1 · TŁUMACZENIE/, "pierwsza lekcja zaczyna się od nowego materiału");
+  assert.match(text(), /Krok 1 · tłumaczenie/, "pierwsza lekcja zaczyna się od nowego materiału");
   assert.match(text(), /dosłownie: Ja chciałbym chętnie jedną kawę\./, "na poziomie A widać tłumaczenie dosłowne");
   await click('[data-act="matNext"]');
   await click('[data-act="chunk"]', 40);
   assert.match(text(), /möchtest = forma od mögen/, "stuknięty zwrot pokazuje, jak jest zbudowany");
   assert.equal(db.bank.length, 1);
   await click('[data-act="matNext"]'); await click('[data-act="matNext"]');
-  assert.match(text(), /JAK TO JEST ZBUDOWANE/); assert.match(text(), /Czasownik na 2\. miejscu/);
+  assert.match(text(), /Jak to jest zbudowane/); assert.match(text(), /Czasownik na 2\. miejscu/);
   assert.match(text(), /My mówimy tak, a po niemiecku/); assert.match(text(), /Dlaczego\? Niemcy grzecznie zamawiają/, "porównanie PL i DE z wyjaśnieniem");
   await sleep(20);
   assert.equal(db.grammar.length, 1, "wzór zapisany w Mojej gramatyce");
-  await click('[data-act="matBack"]'); assert.match(text(), /SŁUCHANIE/);
+  await click('[data-act="matBack"]'); assert.match(text(), /Krok 3 · słuchanie/);
   spoken.length = 0; await click('[data-act="playAll"]', 60);
   await sleep(100);
   assert.deepEqual(spoken.slice(0, 2).map(x => x.voice), ["Anna (Enhanced)", "Yannick (Enhanced)"], "kobietę czyta głos kobiecy, mężczyznę męski");
   await click('[data-act="matNext"]'); await click('[data-act="matNext"]');
   assert.equal(db.grammar.length, 1, "powrót nie dubluje gramatyki");
-  assert.match(text(), /JAK POSZŁO/);
+  assert.match(text(), /Jak poszło/);
   await click('[data-act="baro"][data-k="1"]');
   await click('[data-act="actBack"]'); await click('[data-act="baro"][data-k="1"]');
   assert.equal(db.user_languages.find(l => l.lang === "de").difficulty_shift, 1, "ponowny wybór barometru się nie sumuje");
@@ -115,7 +115,7 @@ test("pierwsza lekcja: bez powtórki, gramatyka, barometr, mówienie", async () 
 
 test("druga lekcja zaczyna się od powtórki, a ✕ wraca do języka", async () => {
   await click('[data-act="start"][data-k="de"]'); await click('[data-act="time"][data-k="10"]', 80);
-  assert.match(text(), /POWTÓRKA/);
+  assert.match(text(), /Powtórka/);
   await click('[data-act="quit"]');
   assert.match(text(), /Dzisiejsza lekcja/);
 });

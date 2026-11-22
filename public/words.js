@@ -70,45 +70,44 @@ export function renderLang() {
   const L = learned(lang).length, D = due(lang).length, N = fresh(lang).length, U = solid(lang).length, T = all(lang).length;
   let next = "";
   if (L && !D) { const d = learned(lang).map(w => w.due).sort()[0]; const days = Math.round((new Date(d) - new Date(C.day(0))) / 864e5); next = days <= 1 ? "Następna powtórka jutro." : `Następna powtórka za ${days} dni.`; }
-  return `<div class="screen bg-indigo">
-    <div class="blob" style="width:260px;height:260px;background:var(--indigo-2);top:-110px;right:-90px"></div>
-    <div class="row" style="position:relative"><button class="pillbtn" style="background:rgba(255,255,255,.14);color:#fff" data-act="tab" data-k="home">← Start</button><button class="pillbtn" style="background:var(--sun);color:var(--ink)" data-act="openGuide">Jak się uczyć?</button></div>
-    <div style="display:flex;align-items:center;gap:14px;position:relative">${C.flag(lang, 52)}<div><h1 style="font-size:38px">${C.LANGS[lang].name}</h1><p class="soft">${C.band(ul.score)[0]} · ${C.pct(ul.score)}% drogi do ${C.nextBand(ul.score)}</p></div></div>
+  const g = forLang(lang), cats = [...new Set(g.map(x => x.category))].map(c => CATS[c] || CATS.other);
+  return `<div class="screen bg-ground lang">
+    <header class="lhead">${C.landmark(lang)}
+      <div class="row"><button class="pillbtn"  data-act="tab" data-k="home">← Start</button><button class="pillbtn"  data-act="openGuide">Jak się uczyć?</button></div>
+      <div class="lhead-title">${C.flag(lang, 44)}<div><h1>${C.LANGS[lang].name}</h1><p>${C.band(ul.score)[0]} · ${ul.score} pkt · ${C.pct(ul.score)}% do ${C.nextBand(ul.score)}</p></div></div>
+    </header>
 
-    <div class="bubble tilt-l" style="background:var(--sun);color:var(--ink);display:flex;flex-direction:column;gap:10px;position:relative">
-      <h2 style="font-size:26px">Dzisiejsza lekcja</h2>
-      <p>Powtórka, nowy materiał i mówienie, według metody trzech filarów.</p>
-      <button class="go" data-act="start" data-k="${lang}">Zacznij lekcję ${C.I.arrow}</button>
+    <section class="sec sec-main">
+      <h2>Dzisiejsza lekcja</h2>
+      <p>Powtórka, nowy tekst i mówienie.</p>
+      <button class="btn btn-indigo" data-act="start" data-k="${lang}">Zacznij lekcję</button>
       ${topicMap(lang, ul.score)}
-    </div>
+    </section>
 
-    <div class="bubble right tilt-r" style="background:#fff;color:var(--ink);display:flex;flex-direction:column;gap:12px;position:relative">
-      <h2 style="font-size:26px">Powtórka słówek</h2>
-      <div class="wstats"><div><b>${L}/${T}</b><span>poznane</span></div><div><b>${D}</b><span>do powtórki dziś</span></div><div><b>${U}</b><span>utrwalone</span></div></div>
-      <div class="bar" aria-hidden="true" style="background:#E4EAFF"><i style="width:${T ? Math.round(L / T * 100) : 0}%;background:var(--blue)"></i></div>
-      ${D ? `<button class="wbtn primary" data-act="wReview">Powtórz ${D} ${D === 1 ? "słówko" : "słówek"}<span class="sub">Słówka, których termin minął</span></button>` : ""}
-      ${N ? `<button class="wbtn ${D ? "" : "primary"}" data-act="wLesson">Ucz się: ${Math.min(LESSON, N)} nowych słówek<span class="sub">Zostało ${N} nowych, około 6 minut</span></button>` : ""}
-      ${L ? `<button class="wbtn" data-act="wTrain">Trening dowolny<span class="sub">10 losowych z poznanych, bez wpływu na terminy</span></button>` : ""}
-      ${T ? `<button class="wbtn" data-act="wList">Lista wszystkich słówek</button>` : `<p class="small muted">Bank jest pusty. Dodaj słówka poniżej albo stukaj w zakreślone zwroty w lekcjach.</p>`}
+    <section class="sec" style="--acc:var(--blue)">
+      <h2>Powtórka słówek</h2>
+      <div class="wstats"><div><b>${L}/${T}</b><span>poznane</span></div><div><b>${D}</b><span>na dziś</span></div><div><b>${U}</b><span>utrwalone</span></div></div>
+      ${D || N || L ? `<div class="acts">
+        ${D ? `<button class="wbtn primary" data-act="wReview">Powtórz ${D} ${D === 1 ? "słówko" : "słówek"}</button>` : ""}
+        ${N ? `<button class="wbtn ${D ? "" : "primary"}" data-act="wLesson">Ucz się nowych: ${Math.min(LESSON, N)}<span class="sub">zostało ${N}, ok. 6 minut</span></button>` : ""}
+        ${L ? `<button class="wbtn" data-act="wTrain">Trening dowolny<span class="sub">10 losowych, bez wpływu na terminy</span></button>` : ""}
+        <button class="wbtn" data-act="wList">Lista słówek</button></div>` : `<p class="muted">Bank jest pusty. Dodaj słówka niżej albo stukaj zwroty w lekcjach.</p>`}
       ${next ? `<p class="small muted">${next}</p>` : ""}
-    </div>
+    </section>
 
-    <div class="bubble tilt-l" style="background:var(--mint-soft);color:#0B3D25;display:flex;flex-direction:column;gap:10px;position:relative">
-      <h2 style="font-size:26px">Dodaj słówka</h2>
-      <p>Przeczytałeś coś nowego? Wpisz słówko albo zwrot, jedno w linii. Znaczenie możesz dopisać po myślniku.</p>
-      <label class="f" style="color:#0B3D25">Słówka i zwroty<textarea class="field" id="newWords" placeholder="${lang === "de" ? "das Wochenende\nich möchte gern - chętnie bym" : "outgoing\nto look forward to - nie móc się doczekać"}" style="min-height:96px"></textarea></label>
-      <label class="f" style="color:#0B3D25">Gdzie je spotkałeś? (opcjonalnie)<input class="field" type="text" id="newCtx" placeholder="wklej zdanie z książki lub artykułu"></label>
-      <button class="go" data-act="wAdd">Dodaj do banku ${C.I.arrow}</button>
-      ${S.wAdded?.length ? `<p class="small" style="font-weight:700">Dodane: ${S.wAdded.map(C.esc).join(", ")}. Czekają w „Ucz się: nowe słówka”.</p>` : ""}
-    </div>
+    <section class="sec" style="--acc:var(--mint)">
+      <details class="more addw" ${S.wAdded?.length ? "open" : ""}><summary><h2>Dodaj słówka</h2><span class="small muted">Słówka spotkane w ciągu dnia</span></summary>
+      <label class="f">Jedno w linii, znaczenie po myślniku (opcjonalnie)<textarea class="field" id="newWords" placeholder="${lang === "de" ? "das Wochenende\nich möchte gern - chętnie bym" : "outgoing\nto look forward to - nie móc się doczekać"}" style="min-height:96px"></textarea></label>
+      <details class="more"><summary>Dodaj zdanie, w którym je spotkałeś</summary><input class="field" type="text" id="newCtx" placeholder="wklej zdanie z książki lub artykułu"></details>
+      <button class="btn btn-ghost" data-act="wAdd">Dodaj do banku</button>
+      ${S.wAdded?.length ? `<p class="small" style="font-weight:700">Dodane: ${S.wAdded.map(C.esc).join(", ")}. Czekają w „Ucz się nowych”.</p>` : ""}</details>
+    </section>
 
-    <div class="bubble right tilt-r" style="background:var(--coral-soft);color:#4A1405;display:flex;flex-direction:column;gap:10px;position:relative">
-      <h2 style="font-size:26px">Moja gramatyka</h2>
-      ${(() => { const g = forLang(lang); if (!g.length) return `<p>Tu zbiorą się wzory z kroku „Jak to jest zbudowane” w lekcjach.</p>`;
-        const cats = [...new Set(g.map(x => x.category))].map(c => CATS[c] || CATS.other);
-        return `<p><b>${g.length}</b> ${g.length === 1 ? "wzór" : g.length < 5 ? "wzory" : "wzorów"}: ${C.esc(cats.join(", "))}.</p>`; })()}
-      <button class="go" data-act="openGrammar">Otwórz ${C.I.arrow}</button>
-    </div>
+    <section class="sec" style="--acc:var(--coral)">
+      <h2>Moja gramatyka</h2>
+      <p class="muted">${g.length ? `${g.length} ${g.length === 1 ? "wzór" : g.length < 5 ? "wzory" : "wzorów"}: ${C.esc(cats.join(", "))}` : "Wzory z lekcji pojawią się tutaj."}</p>
+      <button class="wbtn" data-act="openGrammar">Otwórz Moją gramatykę</button>
+    </section>
   </div>`;
 }
 
@@ -135,18 +134,18 @@ async function startSession(kind) {
 function distract(w, lang) { return shuffle(all(lang).filter(x => x !== w)).slice(0, 3); }
 function head(W) {
   const total = W.intro >= 0 ? W.items.length : W.queue.length, done = W.intro >= 0 ? W.intro : W.pos;
-  return `<div class="row"><span class="sticker st-sun">${C.esc(W.title.toUpperCase())}</span><button class="pillbtn" style="background:rgba(255,255,255,.15);color:#fff" data-act="wQuit">✕ Wyjdź</button></div>
-  <div class="bar" style="background:rgba(255,255,255,.22)" aria-hidden="true"><i style="width:${Math.round(done / Math.max(1, total) * 100)}%;background:#fff"></i></div>`;
+  return `<div class="row"><span class="sticker st-sun">${C.esc(W.title)}</span><button class="pillbtn"  data-act="wQuit">✕ Wyjdź</button></div>
+  <div class="bar"  aria-hidden="true"><i style="width:${Math.round(done / Math.max(1, total) * 100)}%;background:var(--g)"></i></div>`;
 }
 
 export function renderWords() {
   const W = C.S.W, lang = W.lang;
-  if (W.done) return `<div class="screen bg-blue"><div class="grow"></div><h1 style="font-size:46px">${C.esc(W.done.title)}</h1><p style="color:#D6E2FF">${C.esc(W.done.text)}</p><div class="grow"></div></div>
-    <div class="footer bg-blue" style="display:flex;flex-direction:column;gap:10px">${W.kind === "lesson" && fresh(lang).length ? `<button class="btn btn-sun" data-act="wLesson">Następna lekcja słówek</button>` : ""}<button class="btn btn-white" style="color:var(--blue)" data-act="wBack">Wróć do języka</button></div>`;
+  if (W.done) return `<div class="screen bg-blue"><div class="grow"></div><h1 style="font-size:46px">${C.esc(W.done.title)}</h1><p style="color:var(--mu)">${C.esc(W.done.text)}</p><div class="grow"></div></div>
+    <div class="footer bg-blue" style="display:flex;flex-direction:column;gap:10px">${W.kind === "lesson" && fresh(lang).length ? `<button class="btn btn-sun" data-act="wLesson">Następna lekcja słówek</button>` : ""}<button class="btn btn-white" data-act="wBack">Wróć do języka</button></div>`;
   if (W.intro >= 0 && W.intro < W.items.length) {
     const w = W.items[W.intro];
-    return `<div class="screen bg-blue">${head(W)}<p style="color:#D6E2FF">Nowe słówko ${W.intro + 1} z ${W.items.length}. Przeczytaj zdanie na głos.</p>${wordCard(w, lang)}</div>
-      <div class="footer bg-blue twobtn">${W.intro > 0 ? `<button class="btn btn-ghost" style="color:#fff" data-act="wIntroBack">Wstecz</button>` : ""}<button class="btn btn-white" style="color:var(--blue)" data-act="wIntroNext">Dalej</button></div>`;
+    return `<div class="screen bg-blue">${head(W)}<p style="color:var(--mu)">Nowe słówko ${W.intro + 1} z ${W.items.length}. Przeczytaj zdanie na głos.</p>${wordCard(w, lang)}</div>
+      <div class="footer bg-blue twobtn">${W.intro > 0 ? `<button class="btn btn-ghost"  data-act="wIntroBack">Wstecz</button>` : ""}<button class="btn btn-white" data-act="wIntroNext">Dalej</button></div>`;
   }
   const q = W.queue[W.pos], w = q.w; let body = "";
   if (q.type === "mc") {
@@ -178,7 +177,7 @@ export function renderWords() {
       <div class="row" style="align-items:flex-start"><div style="flex:1"><div class="wex">${sentence(w, "full")}</div><div class="small">${C.esc(w.chunk)} = ${C.esc(w.meaning)}</div></div>${spk(sentence(w, "plain"), lang)}</div>
       ${famHtml(w, lang)}${!W.fb.ok && w.tip ? `<div class="small">${C.esc(w.tip)}</div>` : ""}${!W.fb.ok ? `<div class="small">To słówko wróci za chwilę.</div>` : ""}</div>` : "";
   return `<div class="screen bg-blue">${head(W)}<div class="wcard">${body}${fb}</div></div>
-    ${W.fb ? `<div class="footer bg-blue"><button class="btn btn-white" style="color:var(--blue)" data-act="wNext">Dalej</button></div>` : ""}`;
+    ${W.fb ? `<div class="footer bg-blue"><button class="btn btn-white" data-act="wNext">Dalej</button></div>` : ""}`;
 }
 
 /* ---------- ocena i harmonogram ---------- */

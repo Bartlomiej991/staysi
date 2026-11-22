@@ -40,3 +40,19 @@ test("gdy chmura zawiedzie, czyta głos z telefonu", async () => {
   assert.match(document.querySelector(".toast")?.textContent || "", /Czyta głos z telefonu/);
   globalThis.fetch = orig;
 });
+
+test("ekran Lektor: jeden wybór głosu dla wszystkich języków, z odsłuchem", async () => {
+  await click('[data-act="quit"]'); await click('[data-act="tab"][data-k="home"]'); await click('[data-act="tab"][data-k="me"]');
+  assert.match(text(), /Google · Aoede i Charon/, "w O mnie tylko jedna linijka z lektorem");
+  assert.ok(!document.querySelector("select[data-voice]"), "w O mnie nie ma już list głosów");
+  await click('[data-act="openVoice"]');
+  assert.match(text(), /Jedno ustawienie dla wszystkich języków/);
+  const det = document.querySelector("details.devvoice");
+  assert.ok(det && !det.open, "głosy z telefonu są zwinięte");
+  ttsBodies.length = 0;
+  await click('[data-act="pickVoice"][data-k="m:Puck"]', 60);
+  assert.deepEqual([ttsBodies[0].gender, ttsBodies[0].voice, ttsBodies[0].lang], ["m", "Puck", "de"], "wybór od razu gra próbkę");
+  assert.ok(document.querySelector('.vchip.sel[data-k="m:Puck"]'), "wybrany głos jest zaznaczony");
+  w.dispatchEvent(new w.PopStateEvent("popstate")); await sleep(10);
+  assert.match(text(), /O mnie/, "gest wstecz wraca do O mnie");
+});

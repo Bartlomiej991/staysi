@@ -239,3 +239,221 @@ a{color:var(--indigo)}
 .cmp .cl{font-size:11px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:#6B6785}
 .cmp p,.cmp b{font-size:16px}
 .why{font-size:15px;line-height:1.45}
+.vchips{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.vchip{font:inherit;display:flex;align-items:center;gap:8px;padding:12px;border-radius:14px;border:2px solid var(--line);background:#fff;color:var(--ink);cursor:pointer;text-align:left;flex-wrap:wrap}
+.vchip svg{width:18px;height:18px;flex:none}
+.vchip.sel{border-color:var(--indigo);background:#EEF0FF}
+.vchip .small{width:100%;margin-left:26px;margin-top:-4px}
+
+/* ============ Czytelność (zasady: hierarchia, odstępy, kontrast, spójność, bliskość) ============ */
+:root{ --muted:#4F4B6B; }
+body{line-height:1.55}
+h1{font-size:36px;line-height:1.05}
+h2{font-size:26px;line-height:1.12}
+h3{font-size:19px;line-height:1.25}
+.small{font-size:15px;line-height:1.45}
+.screen{padding:24px 20px 32px;gap:22px}
+.card{padding:20px;gap:12px;border-radius:22px}
+label.f{gap:8px;font-size:15px}
+.field{line-height:1.45}
+p{max-width:38em}
+.btn-ink{background:var(--ink);color:#fff;box-shadow:0 5px 0 #000}
+
+/* lekcja: więcej powietrza między kwestiami, wygodniejsza linia */
+.msg .b{line-height:1.5;padding:14px 18px}
+.msg .who{margin-bottom:6px}
+.para{line-height:1.65;padding:18px}
+.gcard{padding:18px;gap:12px}
+.gcard p,.why{line-height:1.55}
+
+/* ekran języka: nagłówek + sekcje z jednym akcentem koloru */
+.lang{padding-top:0;gap:18px}
+.lhead{margin:0 -20px;padding:20px 20px 24px;background:var(--indigo);color:#fff;border-radius:0 0 28px 28px;display:flex;flex-direction:column;gap:18px}
+.lhead-title{display:flex;align-items:center;gap:14px}
+.lhead-title h1{font-size:34px}
+.lhead-title p{color:var(--lilac);margin-top:4px}
+.sec{background:#fff;border-radius:22px;padding:20px;display:flex;flex-direction:column;gap:14px;border-left:6px solid var(--acc,var(--line))}
+.sec h2{font-size:22px}
+.sec-main{background:var(--sun);border-left:0;box-shadow:0 5px 0 var(--sun-dark)}
+.sec-main .btn{margin-top:2px}
+.sec-main .tmap{border-top-color:rgba(0,0,0,.12)}
+.acts{display:flex;flex-direction:column;gap:10px}
+.wstats div{padding:12px 4px}
+details.more summary{cursor:pointer;font-weight:700;font-size:15px;color:var(--muted);padding:4px 0}
+details.more[open] summary{margin-bottom:8px}
+
+/* ================= Motyw „Ciemna zieleń” (płaski, jedno tło) =================
+   Zasady (Figma): jedno tło wszędzie, tekst bez prostokątów pod spodem,
+   sekcje oddziela odstęp + cienka linia, ramkę mają tylko rzeczy do kliknięcia,
+   jeden kolor akcentu, jeden wyróżniony przycisk na ekranie, wszystko do lewej. */
+:root{
+  --bg:#14221B; --bg-2:#1A2B22; --tx:#ECF3EE; --mu:#A6B8AD; --ln:#2C3E34;
+  --g:#6FD39C; --g-on:#0F1A14; --honey:#E9C46A; --bad:#F2A08A;
+  --indigo:var(--g); --indigo-2:var(--g); --indigo-dark:transparent; --deep:var(--bg);
+  --ink:#0F1A14; --ink-2:var(--bg-2); --ink-3:var(--ln);
+  --sun:var(--g); --sun-dark:transparent;
+  --mint:var(--g); --green:var(--g); --green-2:var(--g); --mint-soft:transparent;
+  --blue:var(--g); --blue-2:var(--g); --sky:var(--mu);
+  --coral:var(--bad); --coral-soft:transparent; --coral-2:var(--bad); --red:var(--bad);
+  --lilac:var(--mu); --lilac-2:var(--mu); --muted:var(--mu); --line:var(--ln); --ground:var(--bg);
+  --display:"Nunito Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  color-scheme:dark;
+}
+body{background:var(--bg);color:var(--tx);font-size:17px;line-height:1.6}
+h1,h2,h3{font-weight:700;letter-spacing:-.005em;line-height:1.2;color:var(--tx)}
+h1{font-size:30px} h2{font-size:24px} h3{font-size:18px}
+.screen{padding:28px 22px 36px;gap:24px}
+.bg-indigo,.bg-deep,.bg-ink,.bg-blue,.bg-green,.bg-coral,.bg-ground{background:var(--bg);color:var(--tx)}
+.blob{display:none}
+.logo,.logo.big{color:var(--tx);letter-spacing:.12em}
+.soft,.soft-2,.muted,.small.muted{color:var(--mu)}
+a,.bg-indigo a,.bg-ink a,.bg-green a,.bg-blue a{color:var(--g)}
+button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{outline:2px solid var(--g);outline-offset:3px}
+
+/* przyciski: jeden pełny (zielony), reszta to obrys albo sam tekst */
+.btn{border-radius:14px;padding:15px;font-weight:700;font-size:17px;box-shadow:none!important}
+.btn:active{transform:scale(.98)}
+.btn-sun,.btn-indigo,.btn-white,.btn-ink{background:var(--g);color:var(--g-on)}
+.btn-coral{background:transparent;color:var(--bad);border:1px solid var(--bad)}
+.btn-ghost{border:1px solid var(--ln);opacity:1;color:var(--tx)}
+.backbtn{background:transparent;color:var(--tx);border:1px solid var(--ln)}
+.pillbtn{background:transparent;border:1px solid var(--ln);color:var(--tx)}
+.go{background:var(--g);color:var(--g-on)}
+.linkbtn{color:var(--g)}
+
+/* naklejki → zwykły tekst w kolorze akcentu */
+.sticker,.st-sun,.st-coral,.st-white,.gcat{background:none;color:var(--g);padding:0;border-radius:0;font-size:13px;letter-spacing:.03em;text-transform:none;font-weight:700}
+.st-coral{color:var(--bad)}
+.streak{background:none;box-shadow:none;color:var(--honey);padding:0;font-size:15px}
+.stamp{background:none;border:0;color:var(--g);padding:0}
+
+/* wszystko, co było „kartą”, staje się sekcją na tym samym tle */
+.card,.sec,.sec-main,.gcard,.wcard,.fixes,.claude,.para,.bubble,.cmp,.cmp.tgt,.gex,.gex.light,.wtip,.verdict,.wfb,.tip{
+  background:transparent!important;color:var(--tx);box-shadow:none;border-radius:0;padding:0}
+.card,.sec,.gcard,.fixes,.claude{gap:12px;padding-top:24px;border-top:1px solid var(--ln)}
+.sec{border-left:0}
+.sec h2,.card h2{font-size:21px}
+.sec-main{border-top:0;padding-top:4px}
+.bg-ink .card{background:transparent}
+.divider,.bg-ink .divider{background:var(--ln)}
+.tmap{border-top:1px solid var(--ln)}
+.wcard{gap:14px}
+.wstats div{background:transparent;border-left:2px solid var(--ln);border-radius:0;text-align:left;padding:2px 0 2px 12px}
+.wstats{text-align:left}
+.wstats b{font-family:var(--display);color:var(--tx)}
+.wstats span,.wbtn .sub,.wpron,.wfam .lbl,.wfam .f i,.wfam .fp,.gex span,.cmp .cl,.para .tr{color:var(--mu)}
+.wpl{color:var(--g)}
+.big-num{color:var(--tx);font-family:var(--display)}
+
+/* cytaty, przykłady, porównania: tylko cienka kreska z boku */
+.gex,.cmp,.wtip,.tip{border-left:2px solid var(--ln);padding:2px 0 2px 14px}
+.cmp.tgt,.gex:not(.light){border-left-color:var(--g)}
+.tip{align-self:stretch;max-width:none;font-size:15px}
+.tip b{color:var(--g)}
+.verdict,.wfb{border-left:2px solid var(--g);padding:2px 0 2px 14px}
+.verdict.ok,.wfb.ok{color:var(--tx);border-left-color:var(--g)}
+.verdict.bad,.wfb.no{color:var(--tx);border-left-color:var(--bad)}
+.num{background:transparent;color:var(--bad);border:1px solid var(--bad)}
+
+/* dialog w lekcji: kwestie bez dymków, rozróżnia je kreska (zielona = ty) */
+.msg{max-width:100%;align-self:stretch}
+.msg.me{align-self:stretch;align-items:flex-start}
+.msg .b,.msg.me .b{background:transparent;color:var(--tx);border-radius:0;padding:2px 0 2px 14px;border-left:2px solid var(--ln);font-size:18px}
+.msg.me .b{border-left-color:var(--g)}
+.msg.me .who{color:var(--g)}
+.who{opacity:1;color:var(--mu);margin:0 0 4px 16px}
+.msg.hl .b,.para.hl{box-shadow:none;border-left-color:var(--honey);border-left-width:4px}
+.para{border-left:2px solid var(--ln);padding:2px 0 2px 14px!important;font-family:var(--body);font-size:18px}
+.ch{background:none;text-decoration:underline;text-decoration-color:var(--honey);text-decoration-thickness:2px;text-underline-offset:4px;font-weight:700}
+.ch.added{background:none;color:var(--honey)}
+.wex b{background:none;color:var(--honey);padding:0}
+.gapcard{background:transparent;color:var(--tx);padding:0;font-size:21px}
+.slot{background:transparent;border:0;border-bottom:2px solid var(--g);border-radius:0}
+.wgap{border-bottom-color:var(--g)}
+.spk{background:transparent;border:1px solid var(--ln);color:var(--g)}
+.lit,.b .lit{color:var(--mu);opacity:1}
+
+/* rzeczy do kliknięcia: cienka ramka, wybrane = zielona ramka */
+.field{background:var(--bg-2);color:var(--tx);border:1px solid var(--ln)!important;border-radius:12px}
+.field::placeholder{color:#7F9387}
+.opt,.bg-ground .opt,.chip,.bg-ground .chip,.wbtn,.tile,.vchip,.src,.baro button,.time,.bubble.lang{
+  background:transparent!important;color:var(--tx)!important;border:1px solid var(--ln)!important;border-radius:14px!important;box-shadow:none}
+.opt.sel,.bg-ground .opt.sel,.chip.sel,.vchip.sel,.src.sel,.time.sel,.wbtn.primary{border-color:var(--g)!important;color:var(--tx)!important;outline:0}
+.opt.sel,.chip.sel,.vchip.sel,.src.sel,.time.sel{box-shadow:inset 0 0 0 1px var(--g)}
+.wbtn.primary{background:var(--g)!important;color:var(--g-on)!important}
+.wbtn.primary .sub{color:var(--g-on);opacity:.8}
+.wbtn.ok{border-color:var(--g)!important} .wbtn.no{border-color:var(--bad)!important}
+.src span{opacity:1;color:var(--mu)}
+.baro button span{font-family:var(--display);color:var(--g)}
+.time b{font-family:var(--display);font-size:30px}
+.time{padding:16px}
+.bubble.lang{padding:18px!important;gap:12px}
+.lang .hi{font-family:var(--display);font-weight:700;font-size:30px}
+.tiles.ans{border-bottom:1px solid var(--ln)}
+.toggle{background:var(--ln)} .toggle.on{background:var(--g)} .toggle::after{background:var(--tx)}
+.bar{background:var(--ln);height:8px} .bar i{background:var(--g)}
+.strength i{background:var(--ln)} .strength i.on{background:var(--g)}
+.bg-ground .strength i{background:var(--ln)} .bg-ground .strength i.on{background:var(--g)}
+.dots i{background:var(--ln)} .dots i.on{background:var(--g)}
+.mic{background:var(--g);color:var(--g-on);box-shadow:none}
+.mic.on{background:var(--bad);color:var(--g-on);box-shadow:none}
+.x,.bg-coral .x{background:transparent;border:1px solid var(--ln);color:var(--tx)}
+.seg,.bg-coral .seg{background:var(--ln);height:6px}
+.seg i,.seg.r i,.seg.a i,.seg.c i,.bg-coral .seg.r i,.bg-coral .seg.a i,.bg-coral .seg.c i,.bg-blue .seg.r i,.bg-green .seg.r i{background:var(--g)}
+
+/* nagłówek ekranu języka bez kolorowego pasa */
+.lhead{background:transparent;color:var(--tx);margin:0;padding:0;border-radius:0}
+.lhead-title p{color:var(--mu)}
+
+/* nawigacja, arkusze, nakładki */
+.nav,.bg-ink .nav{background:var(--bg);border-top:1px solid var(--ln);border-radius:0;margin:0;padding:8px 4px 10px}
+.nav button,.bg-ink .nav button{color:var(--mu)}
+.nav button.on,.bg-ink .nav button.on{color:var(--g)}
+.sheet{background:var(--bg-2);color:var(--tx);border-radius:24px 24px 0 0;border-top:1px solid var(--ln)}
+.grab{background:var(--ln)}
+.overlay{background:rgba(5,10,7,.6)}
+.busy{background:var(--bg);color:var(--tx)}
+.spinner{border-color:var(--ln);border-top-color:var(--g)}
+.toast{background:var(--tx);color:var(--g-on)}
+.greet{color:var(--g);font-family:var(--display);font-weight:700}
+details.more summary{color:var(--mu)}
+/* kafelek języka na starcie: sekcja z linią, nie pudełko */
+.bubble.lang{border:0!important;border-top:1px solid var(--ln)!important;border-radius:0!important;padding:22px 0 0!important}
+.go{border-radius:12px;font-weight:700;font-size:16px;padding:12px 18px}
+
+/* --- dopracowanie po przeglądzie zrzutów --- */
+.pillbtn{background:transparent;color:var(--tx);border:1px solid var(--ln);border-radius:12px;padding:9px 14px;font-size:15px}
+.pillbtn svg{color:var(--g);width:18px;height:18px}
+.chip{color:var(--tx)}
+.chip svg{width:16px;height:16px;color:var(--g);vertical-align:-3px}
+.cmp .cl,.gcat{text-transform:none;letter-spacing:.01em;font-size:13px}
+.cmp.tgt,.gex.light{padding:2px 0 2px 14px!important}
+.who{font-size:13px;font-weight:600}
+.sticker{font-size:14px;letter-spacing:.01em}
+.logo{font-size:15px;letter-spacing:.14em;font-weight:700}
+.logo.big{font-size:40px}
+.streak svg{width:16px;height:16px}
+.lhead .row .pillbtn:last-child{color:var(--g)}
+.msg .b .spk{margin-left:auto}
+.wbtn{padding:16px;font-size:16px;font-weight:700}
+.big-num{font-size:56px}
+/* jeden wyróżniony przycisk: drugi pełny przycisk w tej samej sekcji zamienia się w obrys */
+.sec .btn-indigo,.sec .btn-sun:not(:first-of-type){background:transparent;color:var(--g);border:1px solid var(--g)}
+.sec-main .btn-indigo{background:var(--g);color:var(--g-on);border:0}
+.sumstats{grid-template-columns:repeat(auto-fit,minmax(0,1fr))}
+.sumstats b{font-size:30px}
+.field{font-weight:400}
+label.f{font-weight:600;color:var(--tx)}
+input[type=range]{accent-color:var(--g)}
+details.addw>summary{list-style:none;display:flex;flex-direction:column;gap:2px;padding:0;color:var(--tx)}
+details.addw>summary::-webkit-details-marker{display:none}
+details.addw>summary h2::after{content:" +";color:var(--g);font-weight:400}
+details.addw[open]>summary h2::after{content:" −"}
+details.addw[open]{display:flex;flex-direction:column;gap:14px}
+/* rysunki kraju i tematu w tle */
+.screen,.lhead,.bubble.lang{position:relative}
+.scene{position:absolute;top:8px;right:-6px;width:150px;height:150px;fill:none;stroke:var(--g);stroke-width:1.3;stroke-linecap:round;stroke-linejoin:round;opacity:.22;pointer-events:none;z-index:0}
+.scene.sm{top:14px;right:0;width:96px;height:96px;opacity:.16}
+.lhead .scene{top:40px;right:-10px}
+.screen>*:not(.scene),.lhead>*:not(.scene),.bubble.lang>*:not(.scene){position:relative;z-index:1}
+@media (prefers-reduced-motion:no-preference){.scene{animation:sceneIn .6s ease-out both}@keyframes sceneIn{from{opacity:0;transform:translateY(6px)}}}

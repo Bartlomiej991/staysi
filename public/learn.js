@@ -70,14 +70,14 @@ const PO = { de: "po niemiecku", en: "po angielsku", es: "po hiszpańsku", fr: "
 export function lessonCard(L) {
   const list = L.C.grammar || [], con = (L.C.contrasts || []).filter(c => c && c.target && c.why);
   const po = PO[L.lang] || "w tym języku";
-  return `<span class="sticker st-sun">JAK TO JEST ZBUDOWANE</span>
-    ${con.length ? `<div><h2 style="font-size:32px">My mówimy tak, a ${po}…</h2><p style="color:#CDEBDD">Zdania z dzisiejszego tekstu, w których ${po} mówi się inaczej niż po polsku. I dlaczego.</p></div>
+  return `<span class="sticker st-sun">Jak to jest zbudowane</span>
+    ${con.length ? `<div><h2 style="font-size:32px">My mówimy tak, a ${po}…</h2><p style="color:var(--mu)">Zdania z dzisiejszego tekstu, w których ${po} mówi się inaczej niż po polsku. I dlaczego.</p></div>
     ${con.map(c => `<div class="gcard">
       <div class="cmp"><span class="cl">My mówimy</span><p>${C.esc(c.pl || "")}</p></div>
       <div class="cmp tgt"><span class="cl">${C.esc(po[0].toUpperCase() + po.slice(1))}</span><div class="row" style="align-items:flex-start"><b>${C.esc(c.target)}</b>${spk(c.target, L.lang)}</div>${c.literal ? `<span class="small muted">dosłownie: ${C.esc(c.literal)}</span>` : ""}</div>
       <p class="why"><b>Dlaczego?</b> ${C.esc(c.why)}</p>
     </div>`).join("")}` : ""}
-    ${list.length ? `<div><h2 style="font-size:${con.length ? 26 : 32}px">${con.length ? "Wzory z tekstu" : "Zauważ w tekście"}</h2><p style="color:#CDEBDD">${list.length === 1 ? "Wzór z dzisiejszego tekstu. Poszukaj go" : "Wzory z dzisiejszego tekstu. Poszukaj ich"} w zdaniach, które przed chwilą czytałeś.</p></div>
+    ${list.length ? `<div><h2 style="font-size:${con.length ? 26 : 32}px">${con.length ? "Wzory z tekstu" : "Zauważ w tekście"}</h2><p style="color:var(--mu)">${list.length === 1 ? "Wzór z dzisiejszego tekstu. Poszukaj go" : "Wzory z dzisiejszego tekstu. Poszukaj ich"} w zdaniach, które przed chwilą czytałeś.</p></div>
     ${list.map((g, i) => `<div class="gcard">
       <span class="gcat">${C.esc(CATS[g.category] || CATS.other)}</span>
       <h3>${i + 1}. ${C.esc(g.title)}</h3>
@@ -85,7 +85,7 @@ export function lessonCard(L) {
       ${g.example ? `<div class="gex"><div><b>${C.esc(g.example)}</b><span>${C.esc(g.example_tr || "")}</span></div>${spk(g.example, L.lang)}</div>` : ""}
       ${g.extra ? `<div class="gex"><div>${C.esc(g.extra)}<span>${C.esc(g.extra_tr || "")}</span></div>${spk(g.extra, L.lang)}</div>` : ""}
     </div>`).join("")}
-    <p class="small" style="color:#CDEBDD">Wzory zapisują się w „Mojej gramatyce” na ekranie języka.</p>` : ""}`;
+    <p class="small" style="color:var(--mu)">Wzory zapisują się w „Mojej gramatyce” na ekranie języka.</p>` : ""}`;
 }
 
 /* ---------- Moja gramatyka ---------- */
@@ -121,7 +121,7 @@ export function renderGuide() {
       : md === "B" ? "Mów ok. 2 minuty na osobisty temat albo napisz 4–6 zdań. Używaj nowych zwrotów."
       : "Streść tekst i oceń go w 3 rundach: 3, 2 i 1 minuta. Za każdym razem zostaw tylko to, co najważniejsze.",
     ]);
-  const sec = (title, body, bg = "#fff") => `<div class="card" style="background:${bg}"><h3>${title}</h3>${body}</div>`;
+  const sec = (title, body) => `<div class="card"><h3>${title}</h3>${body}</div>`;
   return `<div class="screen bg-ground">${back(C.LANGS[lang].name)}
     <div><h1 style="font-size:36px">Jak się uczyć?</h1><p class="muted">Krótki przewodnik po STAYSI. Wracaj tu, kiedy chcesz.</p></div>
     ${sec("Codzienny rytm, ok. 20 minut", `<ol class="glist"><li><b>Powtórz słówka</b>, które czekają na dziś (ok. 5 minut).</li><li><b>Zrób dzisiejszą lekcję</b> w wybranym czasie.</li><li><b>W ciągu dnia</b> dopisuj do banku słówka, które gdzieś przeczytasz lub usłyszysz.</li></ol>

@@ -2,6 +2,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import * as Words from "./words.js";
 import * as Learn from "./learn.js";
+import { scene, landmark } from "./scenes.js";
 
 /* ================= Dane stałe ================= */
 const LANGS = {
@@ -25,14 +26,13 @@ const QUOTES = [
   { t: "Ciężko jest dać nieograniczoną energię ograniczonym umysłom.", a: "motto STAYSI" }
 ];
 const TILE = [
-  { bg: "#FFC53D", fg: "#1E1B3A" }, { bg: "#FFFFFF", fg: "#1E1B3A" }, { bg: "#2BB673", fg: "#0B3D25" },
-  { bg: "#8FB8FF", fg: "#10265E" }, { bg: "#FF8E6E", fg: "#4A1405" }
+  { bg: "transparent", fg: "inherit" }
 ];
 const TIMES = [
-  { m: 10, l: "Szybka dawka", bg: "#2BB673", fg: "#0B3D25", n: 4 },
-  { m: 15, l: "Standard", bg: "#FFC53D", fg: "#1E1B3A", n: 6 },
-  { m: 30, l: "Solidna sesja", bg: "#8FB8FF", fg: "#10265E", n: 10 },
-  { m: 45, l: "Pełny trening", bg: "#FF8E6E", fg: "#4A1405", n: 12 }
+  { m: 10, l: "Szybka dawka", bg: "transparent", fg: "inherit", n: 4 },
+  { m: 15, l: "Standard", bg: "transparent", fg: "inherit", n: 6 },
+  { m: 30, l: "Solidna sesja", bg: "transparent", fg: "inherit", n: 10 },
+  { m: 45, l: "Pełny trening", bg: "transparent", fg: "inherit", n: 12 }
 ];
 const INTERVAL = [1, 1, 3, 7, 14, 30]; // dni do następnej powtórki według siły zwrotu
 const PURPOSE = { lesson: "Lekcja", review: "Karty powtórki", check: "Sprawdzenie odpowiedzi", feedback: "Poprawki", placement: "Test poziomu", plan: "Plan nauki", vocative: "Forma imienia", photo: "Zdjęcie strony", enrich: "Karty słówek", lesson_edit: "Redakcja tłumaczenia", tts: "Lektor" };
@@ -315,6 +315,7 @@ function render() {
   else if (S.view === "wlist") html = Words.renderList();
   else if (S.view === "grammar") html = Learn.renderGrammar();
   else if (S.view === "guide") html = Learn.renderGuide();
+  else if (S.view === "voice") html = renderVoice();
   else html = renderMain();
   if (S.sheet) html += renderSheet();
   if (S.add) html += renderAdd();
@@ -340,7 +341,7 @@ function setHl(i) {
   if (cur && cur.scrollIntoView) { try { cur.scrollIntoView({ behavior: "smooth", block: "center" }); } catch { try { cur.scrollIntoView(); } catch {} } }
 }
 const scrollTop = () => { const s = document.querySelector(".screen"); if (s) s.scrollTop = 0; };
-const CTX = { S, get sb() { return sb; }, ai, esc, speak, toast, withBusy, render, scrollTop, day, uid, LANGS, flag, band, pct, nextBand, I };
+const CTX = { scene, landmark, S, get sb() { return sb; }, ai, esc, speak, toast, withBusy, render, scrollTop, day, uid, LANGS, flag, band, pct, nextBand, I };
 Words.init(CTX); Learn.init(CTX);
 
 function renderSetup() {
@@ -358,7 +359,7 @@ function renderAuth() {
     <form id="authForm" style="display:flex;flex-direction:column;gap:12px;position:relative">
       <label class="f">E-mail<input class="field" type="email" id="email" autocomplete="email" value="${esc(S.auth.email || "")}" required></label>
       <label class="f">Hasło<input class="field" type="password" id="pass" autocomplete="${reg ? "new-password" : "current-password"}" minlength="8" required></label>
-      ${S.auth.msg ? `<p class="small" style="background:rgba(255,255,255,.12);padding:12px;border-radius:14px">${esc(S.auth.msg)}</p>` : ""}
+      ${S.auth.msg ? `<p class="small" style="padding:12px;border-radius:14px">${esc(S.auth.msg)}</p>` : ""}
       <button class="btn btn-sun" type="submit">${reg ? "Załóż konto" : "Zaloguj"}</button>
     </form>
     <button class="btn btn-ghost" data-act="authMode" style="position:relative">${reg ? "Mam już konto" : "Nie masz konta? Załóż je"}</button>
@@ -371,25 +372,25 @@ function obShell(body, btn, cls = "bg-indigo", dots = true) {
   const st = S.ob.step;
   return `<div class="screen ${cls}">${body}</div>
   <div class="footer ${cls}">${dots ? `<div class="dots" style="margin-bottom:12px">${Array.from({ length: OB_LAST + 1 }, (_, i) => `<i class="${i <= st ? "on" : ""}"></i>`).join("")}</div>` : ""}
-  <div class="twobtn">${st >= 1 && st <= 8 ? `<button class="btn btn-ghost" style="color:#fff" data-act="obBack">Wstecz</button>` : ""}<button class="btn btn-sun" data-act="obNext">${btn}</button></div></div>`;
+  <div class="twobtn">${st >= 1 && st <= 8 ? `<button class="btn btn-ghost"  data-act="obBack">Wstecz</button>` : ""}<button class="btn btn-sun" data-act="obNext">${btn}</button></div></div>`;
 }
 function renderOb() {
   const st = S.ob.step, P = S.profile;
   if (st === 0) return obShell(`
     <div class="blob" style="width:320px;height:320px;background:var(--indigo-2);top:-90px;right:-120px"></div>
-    <div class="blob" style="width:180px;height:180px;background:var(--sun);bottom:120px;left:-70px"></div>
+    <div class="blob" style="width:180px;height:180px;bottom:120px;left:-70px"></div>
     <div class="grow"></div>
     <div style="position:relative;display:flex;flex-direction:column;gap:18px">
       <div class="logo big">STAYSI</div><div class="greet" id="greet">Cześć!</div>
       <p class="soft">Ucz się języków na tym, co cię naprawdę interesuje.</p></div>`, "Zaczynamy", "bg-indigo", false);
   if (st === 1) { const q = quote(); return obShell(`<div class="grow"></div>
     <h1 style="font-size:56px;line-height:.98">Cześć,<br>poligloto!</h1>
-    <p class="quote soft" style="max-width:300px">„${esc(q.t)}”<br><b style="color:#fff">${esc(q.a)}</b></p><div class="grow"></div>`, "Dalej"); }
+    <p class="quote soft" style="max-width:300px">„${esc(q.t)}”<br><b >${esc(q.a)}</b></p><div class="grow"></div>`, "Dalej"); }
   if (st === 2) return obShell(`<h2>Jak działa STAYSI</h2>
     <p class="soft">Aplikacja opiera się na metodzie Luki Lampariello. Każda lekcja łączy trzy filary:</p>
-    <div class="bubble tilt-l" style="background:var(--sky);color:#10265E"><b>Powtórka.</b> Zwroty wracają w odpowiednim momencie, zanim je zapomnisz.</div>
-    <div class="bubble right tilt-r" style="background:var(--mint);color:#0B3D25"><b>Nowy materiał.</b> Ciekawe, zrozumiałe treści o twoim życiu i pasjach.</div>
-    <div class="bubble tilt-l" style="background:var(--coral-2);color:#4A1405"><b>Mówienie.</b> Od pierwszego dnia mówisz i piszesz, a Claude cię poprawia.</div>
+    <div class="bubble tilt-l" ><b>Powtórka.</b> Zwroty wracają w odpowiednim momencie, zanim je zapomnisz.</div>
+    <div class="bubble right tilt-r" ><b>Nowy materiał.</b> Ciekawe, zrozumiałe treści o twoim życiu i pasjach.</div>
+    <div class="bubble tilt-l" ><b>Mówienie.</b> Od pierwszego dnia mówisz i piszesz, a Claude cię poprawia.</div>
     <p class="small soft-2">Więcej o metodzie znajdziesz w zakładce O mnie.</p>`, "Rozumiem");
   if (st === 3) return obShell(`<h2>Twój język ojczysty</h2><p class="soft">W nim dostaniesz tłumaczenia i wyjaśnienia.</p>
     <div class="opts">${Object.entries(LANGS).map(([k, v]) => `<button class="opt ${P.native === k ? "sel" : ""}" data-act="native" data-k="${k}">${flag(k)}${v.name}</button>`).join("")}</div>`, "Dalej");
@@ -402,10 +403,10 @@ function renderOb() {
   if (st === 6) return obShell(`<h2>Co lubisz?</h2><p class="soft">Z tego Claude będzie układał lekcje.</p>
     <div class="chips">${INTERESTS.map(i => `<button class="chip ${(P.interests || []).includes(i) ? "sel" : ""}" data-act="interest" data-k="${esc(i)}">${esc(i)}</button>`).join("")}
     ${(P.interests || []).filter(i => !INTERESTS.includes(i)).map(i => `<button class="chip sel" data-act="interest" data-k="${esc(i)}">${esc(i)}</button>`).join("")}</div>
-    <div class="answer"><label class="f" style="flex:1">Coś własnego?<input class="field" type="text" id="ownInt" placeholder="np. astronomia"></label><button class="pillbtn" style="background:#fff;color:var(--indigo);height:52px" data-act="addInterest">Dodaj</button></div>`, "Dalej");
+    <div class="answer"><label class="f" style="flex:1">Coś własnego?<input class="field" type="text" id="ownInt" placeholder="np. astronomia"></label><button class="pillbtn" style="height:52px" data-act="addInterest">Dodaj</button></div>`, "Dalej");
   if (st === 7) { const goals = goalList(); return obShell(`<h2>Po co się uczysz?</h2><p class="soft">Możesz wybrać kilka i dopisać własny cel.</p>
     <div class="chips">${[...new Set([...GOALS, ...goals])].map(g => `<button class="chip ${goals.includes(g) ? "sel" : ""}" data-act="goal" data-k="${esc(g)}">${esc(g)}</button>`).join("")}</div>
-    <div class="answer"><label class="f" style="flex:1">Własny cel<input class="field" type="text" id="ownGoal" placeholder="np. egzamin, rozmowa o pracę"></label><button class="pillbtn" style="background:#fff;color:var(--indigo);height:52px" data-act="addGoal">Dodaj</button></div>`, "Dalej"); }
+    <div class="answer"><label class="f" style="flex:1">Własny cel<input class="field" type="text" id="ownGoal" placeholder="np. egzamin, rozmowa o pracę"></label><button class="pillbtn" style="height:52px" data-act="addGoal">Dodaj</button></div>`, "Dalej"); }
   if (st === 8) return obShell(`<h2>Których języków chcesz się uczyć?</h2><p class="soft">Możesz wybrać kilka.</p>
     <div class="opts">${Object.entries(LANGS).filter(([k]) => k !== P.native).map(([k, v]) => `<button class="opt ${S.ob.sel.includes(k) ? "sel" : ""}" data-act="pick" data-k="${k}">${flag(k)}${v.name}</button>`).join("")}</div>`, "Dalej");
   if (st === 9) return obShell(`<h2>${esc(greetName())}, twój plan</h2>
@@ -417,23 +418,23 @@ function renderOb() {
 /* --- Test poziomu --- */
 function renderPlacement() {
   const p = S.pl, L = LANGS[p.lang];
-  if (p.step === "self") return `<div class="screen bg-indigo"><div style="display:flex;align-items:center;gap:12px">${flag(p.lang, 42)}<span class="sticker st-sun" style="align-self:center">${esc(L.name.toUpperCase())}</span></div>
+  if (p.step === "self") return `<div class="screen bg-indigo"><div style="display:flex;align-items:center;gap:12px">${flag(p.lang, 42)}<span class="sticker st-sun" style="align-self:center">${esc(L.name)}</span></div>
     <h2>Jak oceniasz swój poziom?</h2>
     <div class="opts">${SELF.map((o, i) => `<button class="opt ${p.self === i ? "sel" : ""}" data-act="plSelf" data-k="${i}">${o.l}</button>`).join("")}</div></div>
-    <div class="footer bg-indigo twobtn"><button class="btn btn-ghost" style="color:#fff" data-act="plBack">Wstecz</button><button class="btn btn-sun" data-act="plNext">Dalej</button></div>`;
+    <div class="footer bg-indigo twobtn"><button class="btn btn-ghost"  data-act="plBack">Wstecz</button><button class="btn btn-sun" data-act="plNext">Dalej</button></div>`;
   if (p.step === "q") {
     const q = p.questions[p.qi];
-    return `<div class="screen bg-indigo"><span class="sticker st-sun">TEST · ${p.qi + 1} Z ${p.questions.length + 1}</span>
+    return `<div class="screen bg-indigo"><span class="sticker st-sun">Test · ${p.qi + 1} z ${p.questions.length + 1}</span>
       <h2 style="font-size:26px">${esc(q.q)}</h2>
       <div class="opts">${q.options.map((o, i) => `<button class="opt ${p.answers[p.qi] === i ? "sel" : ""}" data-act="plAns" data-k="${i}">${esc(o)}</button>`).join("")}</div></div>
-      <div class="footer bg-indigo twobtn"><button class="btn btn-ghost" style="color:#fff" data-act="plBack">Wstecz</button><button class="btn btn-sun" data-act="plNext">Dalej</button></div>`;
+      <div class="footer bg-indigo twobtn"><button class="btn btn-ghost"  data-act="plBack">Wstecz</button><button class="btn btn-sun" data-act="plNext">Dalej</button></div>`;
   }
-  if (p.step === "write") return `<div class="screen bg-indigo"><span class="sticker st-sun">TEST · OSTATNIE ZADANIE</span>
+  if (p.step === "write") return `<div class="screen bg-indigo"><span class="sticker st-sun">Test · ostatnie zadanie</span>
     <h2 style="font-size:26px">${esc(p.writing_prompt)}</h2>
     <div class="answer"><textarea class="field" id="plWrite" placeholder="Napisz albo podyktuj kilka zdań…">${esc(p.writing || "")}</textarea><button class="mic" data-act="mic" data-k="plWrite" aria-label="Odpowiedz głosem">${I.mic}</button></div></div>
-    <div class="footer bg-indigo twobtn"><button class="btn btn-ghost" style="color:#fff" data-act="plBack">Wstecz</button><button class="btn btn-sun" data-act="plNext">Sprawdź poziom</button></div>`;
+    <div class="footer bg-indigo twobtn"><button class="btn btn-ghost"  data-act="plBack">Wstecz</button><button class="btn btn-sun" data-act="plNext">Sprawdź poziom</button></div>`;
   if (p.step === "result") return `<div class="screen bg-indigo"><div class="grow"></div>
-    <span class="sticker st-sun">${esc(L.name.toUpperCase())}</span>
+    <span class="sticker st-sun">${esc(L.name)}</span>
     <h1 style="font-size:80px">${esc(band(p.score)[0])}</h1>
     <p class="soft">${esc(p.reason || "")}</p><div class="grow"></div></div>
     <div class="footer bg-indigo"><button class="btn btn-sun" data-act="plDone">Super, dalej</button></div>`;
@@ -457,18 +458,18 @@ function renderHome() {
   ${langs.map((l, i) => {
     const t = TILE[i % TILE.length], done = todayDone(l.lang), right = i % 2 === 1;
     return `<div style="display:flex;flex-direction:column;${right ? "align-items:flex-end" : ""}">
-      <div class="bubble lang ${right ? "right tilt-r" : "tilt-l"}" style="background:${t.bg};color:${t.fg};${right ? "width:88%" : ""}">
+      <div class="bubble lang ${right ? "right tilt-r" : "tilt-l"}" style="background:${t.bg};color:${t.fg}">${landmark(l.lang, "scene sm")}
         <div class="row"><span class="hi" style="display:flex;align-items:center;gap:10px">${flag(l.lang, 34)}${LANGS[l.lang].hi}</span><b>${band(l.score)[0]}</b></div>
         <span style="font-weight:600">${LANGS[l.lang].name} · ${l.score} pkt · ${pct(l.score)}% drogi do ${nextBand(l.score)}</span>
         <div class="bar" aria-hidden="true"><i style="width:${pct(l.score)}%"></i></div>
-        ${done ? `<span class="stamp">ZROBIONE DZIŚ</span>` : ""}
+        ${done ? `<span class="stamp">Zrobione dziś</span>` : ""}
         ${Words.dueCount(l.lang) ? `<span class="small" style="font-weight:700">${Words.dueCount(l.lang)} słówek czeka na powtórkę</span>` : ""}
-        <button class="go" data-act="openLang" data-k="${l.lang}" ${done ? 'style="background:transparent;color:inherit;border:2px solid currentColor;font-size:15px;padding:8px 14px"' : ""}>${done ? "Otwórz" : "Zaczynamy"} ${I.arrow}</button>
+        <button class="go" data-act="openLang" data-k="${l.lang}" ${done ? 'style="border:2px solid currentColor;font-size:15px;padding:8px 14px"' : ""}>${done ? "Otwórz" : "Zaczynamy"} ${I.arrow}</button>
       </div></div>`;
   }).join("")}
-  <button class="btn btn-ghost" data-act="addLang" style="color:var(--lilac)">¿Hola? Bonjour? <span style="color:var(--sun)">+ Nowy język</span></button>
+  <button class="btn btn-ghost" data-act="addLang" style="color:var(--mu)">¿Hola? Bonjour? <span style="color:var(--g)">+ Nowy język</span></button>
   <div class="grow"></div>
-  <p class="quote soft">„${esc(q.t)}” <b style="color:#fff">${esc(q.a)}</b></p>`;
+  <p class="quote soft">„${esc(q.t)}” <b >${esc(q.a)}</b></p>`;
 }
 const goalList = () => String(S.profile?.goal || "").split(",").map(s => s.trim()).filter(Boolean);
 const setGoals = list => { S.profile.goal = list.join(", "); };
@@ -497,19 +498,43 @@ function renderCost() {
   const maxL = Math.max(0.000001, ...langs.map(l => l.v));
   const month = new Date().toLocaleDateString("pl-PL", { month: "long" });
   return `<div class="blob" style="width:240px;height:240px;background:var(--ink-2);top:-90px;right:-90px"></div>
-  <span class="logo" style="position:relative">KOSZTY · ${esc(month.toUpperCase())}</span>
+  <span class="logo" style="position:relative">Koszty · ${esc(month)}</span>
   <div style="position:relative;display:flex;flex-direction:column;gap:10px"><span class="big-num">${usd(total)}</span>
-    <div class="bar" style="background:var(--ink-3)" aria-hidden="true"><i style="width:${share}%;background:${share >= 80 ? "var(--red)" : "var(--mint)"}"></i></div>
+    <div class="bar"  aria-hidden="true"><i style="width:${share}%;background:${share >= 80 ? "var(--red)" : "var(--mint)"}"></i></div>
     <span class="small soft-2">${Math.round(share)}% z limitu ${usd(budget)}${share >= 80 ? " · zbliżasz się do limitu" : ""}</span></div>
-  <div class="chips"><span class="chip" style="background:#fff;color:var(--ink);border-color:#fff">Dziś ${usd(today)}</span><span class="chip" style="background:var(--sky);color:#10265E;border-color:var(--sky)">Lekcja śr. ${lessons ? usd(avg) : "–"}</span><span class="chip" style="background:var(--mint);color:#0B3D25;border-color:var(--mint)">Lektor ${Math.round(all.filter(c => c.purpose === "tts").reduce((a, c) => a + (c.input_tokens || 0), 0) / 1000)} tys. znaków z 1 mln gratis</span></div>
+  <div class="chips"><span class="chip" >Dziś ${usd(today)}</span><span class="chip" >Lekcja śr. ${lessons ? usd(avg) : "–"}</span><span class="chip" >Lektor ${Math.round(all.filter(c => c.purpose === "tts").reduce((a, c) => a + (c.input_tokens || 0), 0) / 1000)} tys. znaków z 1 mln gratis</span></div>
   <div class="card"><h3>Według modelu</h3>${Object.keys(models).length ? Object.entries(models).map(([m, x]) => `<div class="row"><span><b>${m}</b><br><span class="small soft-2">${x.n} zapytań · ${(x.t / 1000).toFixed(1)}k tokenów</span></span><b class="tabnum">${usd(x.v)}</b></div>`).join('<div class="divider"></div>') : '<p class="soft-2">Jeszcze nic.</p>'}</div>
-  <div class="card"><h3>Według języka</h3>${langs.map(l => `<div class="row small"><span>${LANGS[l.k].name} · ${l.n} lekcji</span><b class="tabnum">${usd(l.v)}</b></div><div class="bar" style="background:var(--ink-3);height:8px"><i style="width:${l.v / maxL * 100}%;background:var(--sun)"></i></div>`).join("")}</div>
+  <div class="card"><h3>Według języka</h3>${langs.map(l => `<div class="row small"><span>${LANGS[l.k].name} · ${l.n} lekcji</span><b class="tabnum">${usd(l.v)}</b></div><div class="bar" style="height:8px"><i style="width:${l.v / maxL * 100}%;background:var(--sun)"></i></div>`).join("")}</div>
   <div class="card"><h3>Historia</h3>${all.filter(c => c.purpose !== "tts").slice(0, 15).map(c => `<div class="row small"><span>${esc(PURPOSE[c.purpose] || c.purpose)}${c.lang ? " · " + esc(LANGS[c.lang]?.name || c.lang) : ""}<br><span class="soft-2">${new Date(c.created_at).toLocaleString("pl-PL", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</span></span><b class="tabnum">${usd(Number(c.cost_usd))}</b></div>`).join("") || '<p class="soft-2">Jeszcze nic.</p>'}</div>
   <div class="card"><label class="f">Miesięczny limit (USD)<input class="field" type="text" inputmode="decimal" id="budget" value="${esc(budget)}"></label>
     <button class="btn btn-sun" data-act="saveBudget" style="font-size:16px;padding:12px">Zapisz limit</button>
     <p class="small soft-2">Po przekroczeniu limitu serwer wstrzymuje zapytania do Claude do końca miesiąca albo do zmiany limitu.</p></div>`;
 }
 
+/* --- Ekran ustawień lektora: jeden dla wszystkich języków --- */
+const SAMPLE = { de: "Hallo! Hast du Lust, am Samstag Fußball zu schauen?", en: "Hi! Do you fancy watching the match on Saturday?", es: "¡Hola! ¿Te apetece ver el partido el sábado?", fr: "Salut ! Ça te dit de regarder le match samedi ?", it: "Ciao! Ti va di guardare la partita sabato?", pl: "Cześć! Masz ochotę obejrzeć mecz w sobotę?" };
+function renderVoice() {
+  const langs = Object.keys(S.langs).length ? Object.keys(S.langs) : ["en"], sl = langs.includes(S.voiceLang) ? S.voiceLang : langs[0];
+  const chips = g => CLOUD_VOICES[g].map((v, i) => `<button class="vchip ${cloudName(g) === v ? "sel" : ""}" data-act="pickVoice" data-k="${g}:${v}">${I.speaker}<b>${v}</b>${i === 0 ? '<span class="small muted">domyślny</span>' : ""}</button>`).join("");
+  const device = langs.map(k => { const list = voicesFor(k), best = list.length ? quality(list[0]) : 0;
+      const opts = (cur) => list.length ? list.map(v => `<option value="${esc(v.voiceURI)}" ${cur && cur.voiceURI === v.voiceURI ? "selected" : ""}>${esc(v.name)} · ${["", "Podstawowy", "Enhanced", "Premium"][quality(v)]}${genderOf(v) ? (genderOf(v) === "f" ? " · ♀" : " · ♂") : ""}</option>`).join("") : "<option>Brak głosów</option>";
+      return `<p class="small" style="font-weight:800;margin-top:6px">${LANGS[k].name}</p>
+      <label class="f">Głos kobiecy<select class="field" data-voice="${k}" data-g="f">${opts(genderVoices(k, "f")[0] || list[0])}</select></label>
+      <label class="f">Głos męski<select class="field" data-voice="${k}" data-g="m">${genderVoices(k, "m").length ? "" : `<option value="">Brak głosu męskiego, czyta głos kobiecy</option>`}${opts(genderVoices(k, "m")[0])}</select></label>
+      ${best < 2 && IOS ? `<p class="small muted">iPhone pokazuje aplikacjom w przeglądarce tylko podstawowe głosy.</p>` : ""}`; }).join("");
+  const cloudOn = S.cloud && !S.cloudOff;
+  return `<div class="screen bg-ground"><button class="pillbtn backbtn" data-act="tab" data-k="me">← O mnie</button>
+    <div><h1 style="font-size:36px">Lektor</h1><p class="muted">Jedno ustawienie dla wszystkich języków. W dialogach kobiety czyta głos kobiecy, mężczyzn męski, a druga osoba tej samej płci dostaje inny głos.</p></div>
+    ${S.cloud ? `<div class="card"><div class="row"><span><b>Lektor z chmury (Google)</b><br><span class="small muted">Naturalne głosy we wszystkich językach, za darmo w Twoim limicie</span></span><button class="toggle ${cloudOn ? "on" : ""}" data-act="cloudToggle" aria-pressed="${cloudOn}" aria-label="Lektor z chmury"></button></div></div>` : ""}
+    ${cloudOn ? `<div class="card"><h3>Posłuchaj w języku</h3><div class="chips">${langs.map(k => `<button class="chip ${k === sl ? "sel" : ""}" data-act="voiceLang" data-k="${k}">${LANGS[k].name}</button>`).join("")}</div>
+      <p class="small muted">Stuknij głos, żeby go wybrać i usłyszeć. Ten sam głos mówi we wszystkich językach.</p>
+      <h3 style="margin-top:6px">Głos kobiecy</h3><div class="vchips">${chips("f")}</div>
+      <h3 style="margin-top:6px">Głos męski</h3><div class="vchips">${chips("m")}</div></div>` : ""}
+    <div class="card"><label class="f">Tempo: <span id="rateVal">${Math.round(S.rate * 100)}%</span><input type="range" id="rate" min="0.7" max="1.1" step="0.05" value="${S.rate}"></label>
+      <button class="chip" style="align-self:flex-start" data-act="pickVoice" data-k="${"f:" + cloudName("f")}">${I.speaker} Posłuchaj tempa</button></div>
+    <div class="card">${cloudOn ? `<details class="devvoice"><summary class="small" style="font-weight:800;cursor:pointer">Głos z telefonu (zapasowy) ›</summary><div style="display:flex;flex-direction:column;gap:12px;margin-top:10px"><p class="small muted">Używany, gdy chmura nie działa.</p>${device}</div></details>` : `<h3>Głos z telefonu</h3>${device}`}</div>
+  </div>`;
+}
 function renderMe() {
   const P = S.profile;
   return `<h2>O mnie</h2>
@@ -527,18 +552,8 @@ function renderMe() {
   </div>
   <div class="card"><h3>Języki i poziomy</h3>${Object.values(S.langs).map(l => `<div class="row"><span>${LANGS[l.lang].name} · <b>${band(l.score)[0]}</b> <span class="small muted">(${l.score} pkt)</span></span><button class="chip" data-act="retest" data-k="${l.lang}">Powtórz test</button></div>`).join('<div class="divider"></div>')}
     <button class="chip" data-act="addLang" style="align-self:flex-start">+ Dodaj język</button></div>
-  <div class="card"><h3>Lektor</h3>
-    ${S.cloud ? `<div class="row"><span><b>Lektor z chmury (Google)</b><br><span class="small muted">Naturalne głosy we wszystkich językach</span></span><button class="toggle ${S.cloudOff ? "" : "on"}" data-act="cloudToggle" aria-pressed="${!S.cloudOff}" aria-label="Lektor z chmury"></button></div>
-    ${S.cloudOff ? "" : `<label class="f">Głos kobiecy<select class="field" data-cloud="f">${CLOUD_VOICES.f.map(v => `<option ${cloudName("f") === v ? "selected" : ""}>${v}</option>`).join("")}</select></label>
-    <label class="f">Głos męski<select class="field" data-cloud="m">${CLOUD_VOICES.m.map(v => `<option ${cloudName("m") === v ? "selected" : ""}>${v}</option>`).join("")}</select></label>
-    <p class="small muted">Ten sam głos mówi we wszystkich językach. Druga osoba tej samej płci w dialogu dostaje inny głos z listy. Gdy chmura nie działa, czyta głos z telefonu.</p>`}<div class="divider"></div><p class="small" style="font-weight:800">Głos z telefonu (zapasowy)</p>` : ""}
-    <p class="small muted">W dialogach kobiety czyta głos kobiecy, a mężczyzn męski. Aplikacja rozpoznaje płeć popularnych głosów po imieniu; jeśli się pomyli, zmień tutaj.</p>${Object.keys(S.langs).map(k => { const list = voicesFor(k), best = list.length ? quality(list[0]) : 0;
-      const opts = (cur) => list.length ? list.map(v => `<option value="${esc(v.voiceURI)}" ${cur && cur.voiceURI === v.voiceURI ? "selected" : ""}>${esc(v.name)} · ${["", "Podstawowy", "Enhanced", "Premium"][quality(v)]}${genderOf(v) ? (genderOf(v) === "f" ? " · ♀" : " · ♂") : ""}</option>`).join("") : "<option>Brak głosów</option>";
-      return `<p class="small" style="font-weight:800;margin-top:6px">${LANGS[k].name}</p>
-      <label class="f">Głos kobiecy<select class="field" data-voice="${k}" data-g="f">${opts(genderVoices(k, "f")[0] || list[0])}</select></label>
-      <label class="f">Głos męski<select class="field" data-voice="${k}" data-g="m">${genderVoices(k, "m").length ? "" : `<option value="">Brak głosu męskiego, czyta głos kobiecy</option>`}${opts(genderVoices(k, "m")[0])}</select></label>
-      ${best < 2 ? (IOS ? `<p class="small muted">iPhone udostępnia aplikacjom w przeglądarce tylko podstawowe głosy; pobrane wersje Enhanced i Premium tu się nie pojawią. Naturalny głos: zaznacz tekst i wybierz <b>Speak</b> (Settings → Accessibility → Read &amp; Speak → Speak Selection).</p>` : `<p class="small" style="color:var(--red)">Brak naturalnego głosu. Android: Ustawienia → Zamiana tekstu na mowę → pobierz lepszy głos.</p>`) : ""}`; }).join("")}
-    <label class="f">Tempo: <span id="rateVal">${Math.round(S.rate * 100)}%</span><input type="range" id="rate" min="0.7" max="1.1" step="0.05" value="${S.rate}"></label></div>
+  <div class="card"><div class="row"><span><h3>Lektor</h3><span class="small muted">${S.cloud && !S.cloudOff ? `Google · ${cloudName("f")} i ${cloudName("m")}` : "Głos z telefonu"} · tempo ${Math.round(S.rate * 100)}%</span></span>
+    <button class="chip" data-act="openVoice">Ustawienia ›</button></div></div>
   <div class="card"><h3>Przypomnienia</h3>
     <div class="row"><span>Codzienne przypomnienie</span><button class="toggle ${P.remind ? "on" : ""}" data-act="remind" aria-label="Przypomnienia" aria-pressed="${P.remind}"></button></div>
     <label class="f">Godzina<input class="field" type="time" id="remAt" value="${esc(P.remind_at)}"></label>
@@ -547,7 +562,7 @@ function renderMe() {
     <p>STAYSI opiera się na metodzie Luki Lampariello, włoskiego poligloty i trenera językowego. Każda lekcja łączy trzy filary: powtórkę (zwroty wracają w odpowiednim momencie), nowy materiał (ciekawe i zrozumiałe treści, około 85–90% znanych słów) i mówienie od pierwszego dnia.</p>
     <p><a href="https://lucalampariello.com" target="_blank" rel="noopener">Strona Luki</a> · <a href="https://www.youtube.com/@lucalampariello" target="_blank" rel="noopener">Kanał na YouTube</a></p>
     <p class="small muted">STAYSI jest inspirowana jego metodą i nie jest z nim oficjalnie powiązana.</p></div>
-  <button class="btn btn-ghost" data-act="logout" style="color:var(--muted)">Wyloguj się</button>`;
+  <button class="btn btn-ghost" data-act="logout" style="color:var(--mu)">Wyloguj się</button>`;
 }
 
 /* --- Nakładki: czas i nowy język --- */
@@ -565,13 +580,13 @@ function renderSheet() {
     <p class="small soft-2" style="font-weight:800">2. Ile masz czasu? Stuknij, żeby zacząć.</p>
     <div class="times">${TIMES.map((t, i) => `<button class="time ${i % 2 ? "tilt-r" : "tilt-l"} ${S.profile._lastTime === t.m ? "sel" : ""}" style="background:${t.bg};color:${t.fg}" data-act="time" data-k="${t.m}"><b>${t.m}<span style="font-size:17px"> min</span></b><small>${t.l}</small></button>`).join("")}</div>
     <p class="small soft-2">${esc(LANGS[S.sheet].name)} · im więcej czasu, tym dłuższy tekst i więcej mówienia</p>
-    <button class="btn btn-ghost" style="color:var(--lilac)" data-act="closeSheet">Anuluj</button></div></div>`;
+    <button class="btn btn-ghost" style="color:var(--mu)" data-act="closeSheet">Anuluj</button></div></div>`;
 }
 function renderAdd() {
   const free = Object.keys(LANGS).filter(k => k !== S.profile.native && !S.langs[k]);
   return `<div class="overlay" data-act="closeAdd"><div class="sheet" role="dialog" aria-label="Nowy język"><div class="grab"></div><h2>Nowy język</h2>
     ${free.length ? `<div class="opts">${free.map(k => `<button class="opt" data-act="addPick" data-k="${k}">${flag(k)}${LANGS[k].name}</button>`).join("")}</div>` : "<p>Uczysz się już wszystkich dostępnych języków.</p>"}
-    <button class="btn btn-ghost" style="color:var(--lilac)" data-act="closeAdd">Anuluj</button></div></div>`;
+    <button class="btn btn-ghost" style="color:var(--mu)" data-act="closeAdd">Anuluj</button></div></div>`;
 }
 
 /* --- Lekcja --- */
@@ -596,26 +611,26 @@ function renderReview() {
   if (!L.introSeen) {
     if (L.C.mode === "C") {
       const items = S.bank.filter(b => b.lang === L.lang && b.introduced !== false).slice(0, 8);
-      return `<div class="screen"><span class="sticker st-sun">POWTÓRKA · SKARBIEC</span><h2>Twój Skarbiec</h2>
-        <p style="color:#D6E2FF">Słowa z czytania razem ze zdaniem, z którego pochodzą.</p>
+      return `<div class="screen"><span class="sticker st-sun">Powtórka · skarbiec</span><h2>Twój Skarbiec</h2>
+        <p style="color:var(--mu)">Słowa z czytania razem ze zdaniem, z którego pochodzą.</p>
         <div class="card">${items.map(b => `<div class="row"><div><b>${esc(b.chunk)}</b> · <span class="muted">${esc(b.meaning)}</span>${b.context ? `<br><span class="small" style="font-style:italic">${esc(b.context)}</span>` : ""}</div><button class="spk" data-act="say" data-k="${esc(b.context || b.chunk)}" data-l="${L.lang}" aria-label="Odsłuchaj">${I.speaker}</button></div>`).join('<div class="divider"></div>')}</div></div>
-        <div class="footer"><button class="btn btn-white" style="color:var(--blue)" data-act="introDone">Dalej: ${L.cards.length} kart</button></div>`;
+        <div class="footer"><button class="btn btn-white" data-act="introDone">Dalej: ${L.cards.length} kart</button></div>`;
     }
     const prev = L.prev?.lines || [];
-    return `<div class="screen"><span class="sticker st-sun">POWTÓRKA</span><h2>Rozgrzewka pamięci</h2>
-      <p style="color:#D6E2FF">Najpierw posłuchaj poprzedniej lekcji. Potem ${L.cards.length} ${L.cards.length < 5 ? "karty" : "kart"} z twoimi zwrotami.</p>
+    return `<div class="screen"><span class="sticker st-sun">Powtórka</span><h2>Rozgrzewka pamięci</h2>
+      <p style="color:var(--mu)">Najpierw posłuchaj poprzedniej lekcji. Potem ${L.cards.length} ${L.cards.length < 5 ? "karty" : "kart"} z twoimi zwrotami.</p>
       ${prev.length ? `<div class="card">${prev.map(l => `<p><span class="small muted">${esc(l.speaker)}:</span> ${esc(l.text)}</p>`).join("")}</div>
-      <button class="pillbtn" style="background:var(--sun);color:var(--ink);align-self:flex-start" data-act="playPrev">${I.speaker} Odsłuchaj</button>` : ""}</div>
-      <div class="footer"><button class="btn btn-white" style="color:var(--blue)" data-act="introDone">Dalej</button></div>`;
+      <button class="pillbtn" style="align-self:flex-start" data-act="playPrev">${I.speaker} Odsłuchaj</button>` : ""}</div>
+      <div class="footer"><button class="btn btn-white" data-act="introDone">Dalej</button></div>`;
   }
   const card = [...L.cards, ...L.retry][L.i], fb = L.cardFb, b = S.bank.find(x => x.lang === L.lang && x.chunk === card.chunk);
-  return `<div class="screen"><div class="row"><span class="sticker st-sun">POWTÓRKA</span><span class="small" style="color:#D6E2FF;font-weight:700">${L.i + 1}/${L.cards.length + L.retry.length}</span></div>
-    <div><p style="color:#D6E2FF">Jak powiesz w języku: ${esc(LANGS[L.lang].name.toLowerCase())}?</p><h2 style="font-size:32px">„${esc(card.prompt_native)}”</h2></div>
-    <div class="gapcard"><span>${esc(card.before)}</span><span class="slot">${fb ? `<span style="color:${fb.ok ? "#137A48" : "var(--red)"}">${esc(card.answer)}</span>` : ""}</span><span>${esc(card.after)}</span></div>
-    ${fb ? `<div class="verdict ${fb.ok ? "ok" : "bad"}">${esc(fb.text)}</div>` : `<div class="answer"><label class="f" style="flex:1;color:#D6E2FF">Twoja odpowiedź<input class="field" type="text" id="ans" autocomplete="off" autocapitalize="off" spellcheck="false"></label><button class="mic" data-act="mic" data-k="ans" aria-label="Odpowiedz głosem">${I.mic}</button></div>`}
+  return `<div class="screen"><div class="row"><span class="sticker st-sun">Powtórka</span><span class="small" style="color:var(--mu);font-weight:700">${L.i + 1}/${L.cards.length + L.retry.length}</span></div>
+    <div><p style="color:var(--mu)">Jak powiesz w języku: ${esc(LANGS[L.lang].name.toLowerCase())}?</p><h2 style="font-size:32px">„${esc(card.prompt_native)}”</h2></div>
+    <div class="gapcard"><span>${esc(card.before)}</span><span class="slot">${fb ? `<span style="color:${fb.ok ? "var(--g)" : "var(--bad)"}">${esc(card.answer)}</span>` : ""}</span><span>${esc(card.after)}</span></div>
+    ${fb ? `<div class="verdict ${fb.ok ? "ok" : "bad"}">${esc(fb.text)}</div>` : `<div class="answer"><label class="f" style="flex:1;color:var(--mu)">Twoja odpowiedź<input class="field" type="text" id="ans" autocomplete="off" autocapitalize="off" spellcheck="false"></label><button class="mic" data-act="mic" data-k="ans" aria-label="Odpowiedz głosem">${I.mic}</button></div>`}
     <div class="grow"></div>
-    ${b ? `<div class="row" style="justify-content:center"><span class="small" style="color:#D6E2FF">Siła zwrotu</span><span class="strength">${[1, 2, 3, 4, 5].map(i => `<i class="${i <= b.strength ? "on" : ""}"></i>`).join("")}</span></div>` : ""}</div>
-    <div class="footer"><button class="btn btn-white" style="color:var(--blue)" data-act="${fb ? "nextCard" : "check"}">${fb ? "Dalej" : "Sprawdź"}</button></div>`;
+    ${b ? `<div class="row" style="justify-content:center"><span class="small" style="color:var(--mu)">Siła zwrotu</span><span class="strength">${[1, 2, 3, 4, 5].map(i => `<i class="${i <= b.strength ? "on" : ""}"></i>`).join("")}</span></div>` : ""}</div>
+    <div class="footer"><button class="btn btn-white" data-act="${fb ? "nextCard" : "check"}">${fb ? "Dalej" : "Sprawdź"}</button></div>`;
 }
 function chunked(line) {
   let html = esc(line.text);
@@ -630,16 +645,16 @@ function matSteps(L) {
   const isC = L.C.mode === "C", reading = isC ? 2 : 3, gram = ((L.C.grammar || []).length || (L.C.contrasts || []).length) ? reading : -1;
   return { gram, baro: gram >= 0 ? gram + 1 : reading };
 }
-const backBtn = (act, color = "#fff") => `<button class="btn btn-ghost" style="color:${color}" data-act="${act}">Wstecz</button>`;
+const backBtn = (act) => `<button class="btn btn-ghost" data-act="${act}">Wstecz</button>`;
 function renderMat() {
   const L = S.L, C = L.C, step = L.step, isC = C.mode === "C", ms = matSteps(L), baroStep = ms.baro;
   if (step === ms.gram) return `<div class="screen">${Learn.lessonCard(L)}</div>
-    <div class="footer twobtn">${backBtn("matBack")}<button class="btn btn-white" style="color:var(--green)" data-act="matNext">Dalej</button></div>`;
-  if (step === baroStep) return `<div class="screen"><span class="sticker st-sun">JAK POSZŁO?</span><h2>Jak ci się ${isC ? "czytało" : "słuchało"}?</h2>
-    <p style="color:#CDEBDD">Odpowiedź ustawi trudność kolejnych lekcji.</p>
+    <div class="footer twobtn">${backBtn("matBack")}<button class="btn btn-white" data-act="matNext">Dalej</button></div>`;
+  if (step === baroStep) return `<div class="screen"><span class="sticker st-sun">Jak poszło?</span><h2>Jak ci się ${isC ? "czytało" : "słuchało"}?</h2>
+    <p style="color:var(--mu)">Odpowiedź ustawi trudność kolejnych lekcji.</p>
     <div class="baro">${[["Za łatwe", "zzz", 1], ["W sam raz", "ok!", 0], ["Za trudne", "uff", -1]].map(([l, e, v]) => `<button data-act="baro" data-k="${v}" data-l="${l}"><span>${e}</span>${l}</button>`).join("")}</div></div>
     <div class="footer twobtn">${backBtn("matBack")}</div>`;
-  const label = isC ? ["CZYTANIE", "SŁUCHANIE"][step] : ["KROK 1 · TŁUMACZENIE", "KROK 2 · ORYGINAŁ", "KROK 3 · SŁUCHANIE"][step];
+  const label = isC ? ["Czytanie", "Słuchanie"][step] : ["Krok 1 · tłumaczenie", "Krok 2 · oryginał", "Krok 3 · słuchanie"][step];
   let body = "";
   if (isC) {
     body = C.lines.map((ln, i) => `<div class="para ${L.hl === i ? "hl" : ""}" data-line="${i}"><div style="flex:1">${chunked(ln)}${L.showTr[i] ? `<span class="tr">${esc(ln.translation)}</span>` : ""}</div>
@@ -649,44 +664,44 @@ function renderMat() {
       <div class="b"><span>${step === 0 ? `${esc(ln.translation)}${ln.literal ? `<span class="lit">dosłownie: ${esc(ln.literal)}</span>` : ""}` : chunked(ln)}</span>${step > 0 ? `<button class="spk" data-act="sayLine" data-k="${i}" aria-label="Odsłuchaj">${I.speaker}</button>` : ""}</div></div>`).join("");
   }
   const tip = L.tip ? `<div class="tip"><b>${esc(L.tip.text)}</b> = ${esc(L.tip.meaning)}${L.tip.how ? `<br><span class="how">${esc(L.tip.how)}</span>` : ""}<br><span class="small">Zapisane w twoim banku</span></div>` : "";
-  const hint = (isC && step === 0) ? `<p class="small" style="color:#CDEBDD">Czytasz od razu oryginał. PL pokazuje tłumaczenie akapitu, gdy utkniesz. Stuknięte słowo trafia do Skarbca.</p>`
-    : (!isC && step === 1) ? `<p class="small" style="color:#CDEBDD">Stuknij zakreślony zwrot, żeby go zapisać.</p>` : "";
-  const listen = ((isC && step === 1) || (!isC && step === 2)) ? `<button class="pillbtn" style="background:var(--sun);color:var(--ink);align-self:flex-start" data-act="playAll">${I.speaker} Odtwórz całość</button>` : "";
-  const photo = (isC && step === 0) ? `<label class="btn btn-ghost" for="pages" style="color:#fff;cursor:pointer">Dodaj zdjęcie strony z własnej książki</label><input type="file" id="pages" accept="image/*" style="display:none">` : "";
-  return `<div class="screen"><span class="sticker st-sun">${label}</span>
-    <div><h2 style="font-size:36px">${esc(C.title)}</h2><p style="color:#CDEBDD">${esc(C.intro)}</p></div>
+  const hint = (isC && step === 0) ? `<p class="small" style="color:var(--mu)">Czytasz od razu oryginał. PL pokazuje tłumaczenie akapitu, gdy utkniesz. Stuknięte słowo trafia do Skarbca.</p>`
+    : (!isC && step === 1) ? `<p class="small" style="color:var(--mu)">Stuknij zakreślony zwrot, żeby go zapisać.</p>` : "";
+  const listen = ((isC && step === 1) || (!isC && step === 2)) ? `<button class="pillbtn" style="align-self:flex-start" data-act="playAll">${I.speaker} Odtwórz całość</button>` : "";
+  const photo = (isC && step === 0) ? `<label class="btn btn-ghost" for="pages" style="cursor:pointer">Dodaj zdjęcie strony z własnej książki</label><input type="file" id="pages" accept="image/*" style="display:none">` : "";
+  return `<div class="screen">${step === 0 ? scene(L.lang, C.topic_tag) : ""}<span class="sticker st-sun">${label}</span>
+    <div><h2 style="font-size:36px">${esc(C.title)}</h2><p style="color:var(--mu)">${esc(C.intro)}</p></div>
     ${hint}${listen}<div style="display:flex;flex-direction:column;gap:10px">${body}</div>${tip}${photo}</div>
-    <div class="footer twobtn">${step > 0 ? backBtn("matBack") : ""}<button class="btn btn-white" style="color:var(--green)" data-act="matNext">Dalej</button></div>`;
+    <div class="footer twobtn">${step > 0 ? backBtn("matBack") : ""}<button class="btn btn-white" data-act="matNext">Dalej</button></div>`;
 }
 function renderAct() {
   const L = S.L, A = L.C.activation || {}, isC = L.C.mode === "C";
   if (L.fb) {
     const f = L.fb;
-    return `<div class="screen"><div class="row"><span class="sticker st-coral">MÓWIENIE · ${esc((A.name || "").toUpperCase())}</span><span class="streak" style="font-size:16px">Brawo!</span></div>
-      <div class="msg me" style="max-width:100%"><span class="who">Ty</span><div class="b" style="background:#fff">${esc(isC ? L.rounds[L.rounds.length - 1] : L.answer)}</div></div>
+    return `<div class="screen"><div class="row"><span class="sticker st-coral">Mówienie · ${esc(A.name || "")}</span><span class="streak" style="font-size:16px">Brawo!</span></div>
+      <div class="msg me" style="max-width:100%"><span class="who">Ty</span><div class="b" >${esc(isC ? L.rounds[L.rounds.length - 1] : L.answer)}</div></div>
       <div class="msg" style="max-width:100%"><span class="who">Claude</span><div class="claude">
-        <p style="color:var(--lilac)">${esc(f.praise)}</p>
+        <p style="color:var(--mu)">${esc(f.praise)}</p>
         <p style="font-family:var(--display);font-weight:800;font-size:21px;line-height:1.25">${esc(f.corrected)}</p>
-        <button class="pillbtn" style="background:var(--sun);color:var(--ink);align-self:flex-start" data-act="sayFix">${I.speaker} Odsłuchaj</button></div></div>
+        <button class="pillbtn" style="align-self:flex-start" data-act="sayFix">${I.speaker} Odsłuchaj</button></div></div>
       <div class="fixes">${(f.fixes || []).map((x, i) => `<div style="display:flex;gap:12px"><span class="num">${i + 1}</span><p class="small" style="font-size:15px">${esc(x)}</p></div>`).join("")}
         ${f.score_estimate ? `<p class="small muted" style="margin-top:4px">Poziom tej odpowiedzi: <b>${band(f.score_estimate)[0]}</b> (${f.score_estimate} pkt)${f.estimate_reason ? ` · ${esc(f.estimate_reason)}` : ""}</p>` : f.estimate_reason ? `<p class="small muted">${esc(f.estimate_reason)}</p>` : ""}
         ${(f.more || []).length ? (L.showMore ? `<p class="small muted">${(f.more || []).map(esc).join("<br>")}</p>` : `<a href="#" data-act="showMore">Pokaż wszystkie poprawki</a>`) : ""}</div>
-      <div class="card" style="background:#fff">
+      <div class="card" >
         <label class="f">Coś się nie zgadza? Doprecyzuj, co miałeś na myśli<textarea class="field" id="clarify" placeholder="np. nie chodziło mi o „rabbit family”, tylko o Revit family">${esc(L.clarify || "")}</textarea></label>
-        ${(L.clarified || 0) < 3 ? `<button class="btn btn-ghost" style="color:var(--ink)" data-act="clarify">Popraw z tym wyjaśnieniem</button>` : `<p class="small muted">Limit wyjaśnień w tej lekcji wykorzystany.</p>`}
+        ${(L.clarified || 0) < 3 ? `<button class="btn btn-ghost"  data-act="clarify">Popraw z tym wyjaśnieniem</button>` : `<p class="small muted">Limit wyjaśnień w tej lekcji wykorzystany.</p>`}
       </div></div>
-      <div class="footer"><button class="btn btn-coral" data-act="finish">Zakończ lekcję</button></div>`;
+      <div class="footer"><button class="btn btn-sun" data-act="finish">Zakończ lekcję</button></div>`;
   }
   const r = (L.rounds || []).length;
   const roundInfo = isC ? `<div class="chips">${[3, 2, 1].map((m, i) => `<span class="chip ${i === r ? "sel" : ""}" style="border-color:rgba(30,27,58,.2);${i < r ? "opacity:.5;text-decoration:line-through" : ""}">Runda ${i + 1}: ${m} min</span>`).join("")}</div>
     <p class="small muted">${r === 0 ? "Mów albo pisz swobodnie przez około 3 minuty." : r === 1 ? "Ta sama treść w 2 minuty. Wyrzuć mniej ważne rzeczy." : "Ostatnia runda: 1 minuta, tylko sedno."}</p>` : "";
-  return `<div class="screen"><span class="sticker st-coral">MÓWIENIE · ${esc((A.name || "").toUpperCase())}</span>
+  return `<div class="screen"><span class="sticker st-coral">Mówienie · ${esc(A.name || "")}</span>
     <h2 style="font-size:28px">${esc(A.task)}</h2>
-    ${A.task_native ? `<div class="row" style="justify-content:flex-start;gap:8px"><button class="pillbtn" style="background:var(--ink);color:#fff" data-act="sayTask">${I.speaker} Odsłuchaj</button><button class="pillbtn" style="background:transparent;border:2px solid currentColor" data-act="taskPl">${L.taskPl ? "Ukryj PL" : "PL"}</button></div>${L.taskPl ? `<p class="small">${esc(A.task_native)}</p>` : ""}` : ""}
+    ${A.task_native ? `<div class="row" style="justify-content:flex-start;gap:8px"><button class="pillbtn"  data-act="sayTask">${I.speaker} Odsłuchaj</button><button class="pillbtn" data-act="taskPl">${L.taskPl ? "Ukryj PL" : "PL"}</button></div>${L.taskPl ? `<p class="small">${esc(A.task_native)}</p>` : ""}` : ""}
     ${(A.chunks || []).length ? `<div class="chips">${A.chunks.map(c => `<span class="chip sel">${esc(c)}</span>`).join("")}</div>` : ""}
     ${A.hint ? `<p class="small muted">${esc(A.hint)}</p>` : ""}${roundInfo}
     <div class="answer"><textarea class="field" id="act" placeholder="Napisz albo podyktuj…"></textarea><button class="mic" data-act="mic" data-k="act" aria-label="Odpowiedz głosem">${I.mic}</button></div></div>
-    <div class="footer twobtn">${r === 0 ? backBtn("actBack", "var(--ink)") : ""}<button class="btn btn-coral" data-act="actSend">${isC && r < 2 ? `Gotowe, runda ${r + 2}` : "Sprawdź z Claude"}</button></div>`;
+    <div class="footer twobtn">${r === 0 ? backBtn("actBack", "var(--ink)") : ""}<button class="btn btn-sun" data-act="actSend">${isC && r < 2 ? `Gotowe, runda ${r + 2}` : "Sprawdź z Claude"}</button></div>`;
 }
 // Przejrzysta informacja o poziomie: ile punktów i dlaczego
 function levelLine(L) {
@@ -698,26 +713,23 @@ function levelLine(L) {
     : v.why === "need-more" ? "Awans przychodzi z kilku lekcji na co najmniej 2 różne tematy. Jeszcze trochę."
     : v.why === "up" ? "Kilka ostatnich lekcji z różnych tematów było powyżej Twojego wyniku."
     : "Ostatnie lekcje są na poziomie Twojego wyniku. Wynik nigdy nie spada.";
-  return `<div class="card" style="position:relative;background:rgba(255,255,255,.1);color:#fff;border:0"><p>${head} · ${band(v.to)[0]}</p><p class="small" style="opacity:.85">${why}</p></div>`;
+  return `<div class="card" style="position:relative;border:0"><p>${head} · ${band(v.to)[0]}</p><p class="small" style="opacity:.85">${why}</p></div>`;
 }
 function renderSum() {
   const L = S.L, st = streak(), q = quote(), due = S.bank.filter(b => b.lang === L.lang && b.introduced !== false && b.due <= day(1)).length;
   return `<div class="screen bg-indigo">
-    <div class="blob" style="width:280px;height:280px;background:var(--indigo-2);bottom:-120px;left:-100px"></div>
-    <div class="row" style="justify-content:flex-start;gap:14px;position:relative"><div style="width:74px;height:74px;border-radius:24px;background:var(--sun);display:flex;align-items:center;justify-content:center;box-shadow:0 5px 0 var(--sun-dark)">${I.check}</div>
-      ${st ? `<span class="streak" style="background:#fff">${I.flame}${st} ${st === 1 ? "dzień" : "dni"} z rzędu!</span>` : ""}</div>
-    <h1 style="font-size:54px;position:relative">Brawo,<br>${esc(greetName())}!</h1>
-    <div style="display:flex;flex-direction:column;gap:10px;position:relative">
-      <div class="bubble tilt-l" style="align-self:flex-start;background:var(--mint);color:#0B3D25;padding:12px 18px"><b style="font-family:var(--display);font-size:30px">${L.added.length}</b> nowych zwrotów</div>
-      ${L.first ? "" : `<div class="bubble right tilt-r" style="align-self:flex-end;background:var(--sky);color:#10265E;padding:12px 18px"><b style="font-family:var(--display);font-size:30px">${L.ok}/${L.total}</b> powtórek dobrze</div>`}
-      <div class="bubble tilt-l" style="align-self:flex-start;background:var(--coral-2);color:#4A1405;padding:12px 18px"><b style="font-family:var(--display);font-size:30px">1</b> zadanie z mówienia</div></div>
+    <div class="blob" style="width:280px;height:280px;bottom:-120px;left:-100px"></div>
+    <div class="row" style="justify-content:flex-start;gap:14px;position:relative">
+      ${st ? `<span class="streak" >${I.flame}${st} ${st === 1 ? "dzień" : "dni"} z rzędu!</span>` : ""}</div>
+    ${landmark(L.lang)}<h1 style="font-size:54px;position:relative">Brawo,<br>${esc(greetName())}!</h1>
+    <div class="wstats sumstats"><div><b>${L.added.length}</b><span>nowe zwroty</span></div>${L.first ? "" : `<div><b>${L.ok}/${L.total}</b><span>powtórki dobrze</span></div>`}<div><b>1</b><span>zadanie z mówienia</span></div></div>
     ${levelLine(L)}
-    <div class="btn-ghost" style="border-radius:20px;padding:10px 16px;color:var(--lilac);position:relative">Jutro czeka <b style="color:var(--sun)">${due}</b> zwrotów do powtórki</div>
-    <div class="card" style="position:relative;background:rgba(255,255,255,.1);color:#fff;border:0">
-      <label class="f" style="color:#fff">Co poprawić w następnej lekcji? (opcjonalnie)<textarea class="field" id="nextNote" placeholder="np. kwestie się nie łączyły, brzmiało sztucznie, za łatwe słownictwo">${esc(L.note || "")}</textarea></label>
-      ${L.noteSaved ? `<p class="small" style="font-weight:700">Zapisane. Claude weźmie to pod uwagę od następnej lekcji.</p>` : `<button class="btn btn-ghost" style="color:#fff" data-act="saveNote">Wyślij uwagę do Claude'a</button>`}
+    <p class="muted">Jutro czeka <b style="color:var(--g)">${due}</b> zwrotów do powtórki</p>
+    <div class="card" style="position:relative;border:0">
+      <label class="f" >Co poprawić w następnej lekcji? (opcjonalnie)<textarea class="field" id="nextNote" placeholder="np. kwestie się nie łączyły, brzmiało sztucznie, za łatwe słownictwo">${esc(L.note || "")}</textarea></label>
+      ${L.noteSaved ? `<p class="small" style="font-weight:700">Zapisane. Claude weźmie to pod uwagę od następnej lekcji.</p>` : `<button class="btn btn-ghost"  data-act="saveNote">Wyślij uwagę do Claude'a</button>`}
     </div>
-    <div class="grow"></div><p class="quote soft" style="position:relative">„${esc(q.t)}”<br><b style="color:#fff">${esc(q.a)}</b></p></div>
+    <div class="grow"></div><p class="quote soft" style="position:relative">„${esc(q.t)}”<br><b >${esc(q.a)}</b></p></div>
     <div class="footer bg-indigo"><button class="btn btn-sun" data-act="lessonDone">Gotowe</button></div>`;
 }
 
@@ -774,6 +786,7 @@ function goBack() {
   if (S.sheet) { S.sheet = null; render(); return true; }
   if (S.add) { S.add = null; render(); return true; }
   const v = S.view, L = S.L;
+  if (v === "voice") { S.view = "me"; render(); scrollTop(); return true; }
   if (v === "lang" || MAIN_TABS.includes(v)) { S.view = "home"; render(); scrollTop(); return true; }
   if (["wlist", "grammar", "guide"].includes(v)) { act(v === "wlist" ? "wBack" : "toLang"); return true; }
   if (v === "words") { act(S.W?.intro > 0 ? "wIntroBack" : "wQuit"); return true; }
@@ -879,6 +892,13 @@ async function act(a, k, el) {
       const notes = ($("#meNotes")?.value || "").trim().slice(-1500);
       if (notes !== (P.style_notes || "")) await saveNotes(notes);
       toast("Zapisano."); return render();
+    }
+    case "openVoice": S.view = "voice"; render(); return scrollTop();
+    case "voiceLang": S.voiceLang = k; return render();
+    case "pickVoice": {
+      const [g, v] = k.split(":"); S.cloudVoice[g] = v; saveLocal("staysiCloudVoice", S.cloudVoice);
+      const langs = Object.keys(S.langs), sl = langs.includes(S.voiceLang) ? S.voiceLang : (langs[0] || "en");
+      render(); return speak(SAMPLE[sl] || LANGS[sl].hi, sl, null, { device: null, who: { g, slot: 0 } });
     }
     case "cloudToggle": S.cloudOff = !S.cloudOff; saveLocal("staysiCloudOff", S.cloudOff); return render();
     case "remind": await saveProfile({ remind: !P.remind }); return render();

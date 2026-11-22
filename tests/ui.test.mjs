@@ -25,7 +25,7 @@ before(async () => {
   for (const f of fs.readdirSync(SHOTS)) fs.unlinkSync(path.join(SHOTS, f));
   server = http.createServer((req, res) => {
     const url = new URL(req.url, "http://x");
-    if (url.pathname === "/api/config") { res.setHeader("content-type", "application/json"); return res.end(JSON.stringify({ supabaseUrl: "x", supabaseAnonKey: "y" })); }
+    if (url.pathname === "/api/config") { res.setHeader("content-type", "application/json"); return res.end(JSON.stringify({ supabaseUrl: "x", supabaseAnonKey: "y", cloudVoice: !!process.env.UI_CLOUD })); }
     if (url.pathname === "/api/ai") {
       let body = ""; req.on("data", c => (body += c)); req.on("end", () => { const b = JSON.parse(body); res.setHeader("content-type", "application/json"); res.end(JSON.stringify(fakeAnswer(b.action, b))); });
       return;
@@ -122,7 +122,7 @@ test("wygląd: lekcja od początku do końca", { skip }, async () => {
 });
 
 test("wygląd: bank słówek, gramatyka, przewodnik, zakładki", { skip }, async () => {
-  await fill("#newWords", "das Wochenende\nder Hund - pies\nschnell\nlangsam"); await click('[data-act="wAdd"]', 500);
+  await click("details.addw summary", 150); await fill("#newWords", "das Wochenende\nder Hund - pies\nschnell\nlangsam"); await click('[data-act="wAdd"]', 500);
   await check("slowka-dodane");
   await click('[data-act="wLesson"]', 400); await check("slowka-karta");
   await click('[data-act="wIntroNext"]'); await check("slowka-karta-2");
@@ -134,5 +134,6 @@ test("wygląd: bank słówek, gramatyka, przewodnik, zakładki", { skip }, async
   await click('[data-act="toLang"]'); await click('[data-act="openGuide"]'); await check("przewodnik");
   await click('[data-act="toLang"]'); await click('[data-act="tab"][data-k="home"]');
   for (const t of ["bank", "cost", "me"]) { await click(`[data-act="tab"][data-k="${t}"]`, 200); await check(`zakladka-${t}`); }
+  await click('[data-act="openVoice"]', 200); await check("lektor");
   assert.deepEqual(errors, [], "błędy JavaScript na stronie");
 });

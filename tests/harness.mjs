@@ -61,7 +61,8 @@ export async function boot() {
   const src = fs.readFileSync(path.join(PUB, "app.js"), "utf8")
     .replace(/^import \{ createClient \}.*$/m, "const createClient = () => globalThis.__sb;")
     .replace('"./words.js"', JSON.stringify(pathToFileURL(path.join(PUB, "words.js")).href))
-    .replace('"./learn.js"', JSON.stringify(pathToFileURL(path.join(PUB, "learn.js")).href));
+    .replace('"./learn.js"', JSON.stringify(pathToFileURL(path.join(PUB, "learn.js")).href))
+    .replace('"./scenes.js"', JSON.stringify(pathToFileURL(path.join(PUB, "scenes.js")).href));
   const tmp = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "staysi-")), "app.mjs");
   fs.writeFileSync(tmp, src);
   await import(pathToFileURL(tmp).href);
