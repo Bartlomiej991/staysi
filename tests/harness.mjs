@@ -44,12 +44,15 @@ async function fakeApi(url, opt = {}) {
 }
 
 export const errors = [];
+export const spoken = [];
 export async function boot() {
   const html = fs.readFileSync(path.join(PUB, "index.html"), "utf8").replace(/<script type="module"[^>]*><\/script>/, "");
   const dom = new JSDOM(html, { url: "https://staysi.test/", pretendToBeVisual: true });
   const w = dom.window;
   Object.assign(globalThis, { window: w, document: w.document, localStorage: w.localStorage, location: w.location, history: w.history, Image: w.Image, __sb: sbStub, fetch: fakeApi });
-  w.speechSynthesis = { getVoices: () => [], speak() {}, cancel() {}, addEventListener() {} }; globalThis.speechSynthesis = w.speechSynthesis;
+  const V = (name, lang) => ({ name, lang, voiceURI: name, localService: true });
+  const voices = [V("Anna (Enhanced)", "de-DE"), V("Helena", "de-DE"), V("Yannick (Enhanced)", "de-DE"), V("Samantha", "en-US"), V("Daniel", "en-GB")];
+  w.speechSynthesis = { getVoices: () => voices, speak(u) { spoken.push({ text: u.text, voice: u.voice?.name }); if (u.onend) setTimeout(u.onend, 0); }, cancel() {}, addEventListener() {} }; globalThis.speechSynthesis = w.speechSynthesis;
   w.SpeechSynthesisUtterance = function (t) { this.text = t; }; globalThis.SpeechSynthesisUtterance = w.SpeechSynthesisUtterance;
   process.on("unhandledRejection", e => errors.push(e));
   // app.js ładuje Supabase z internetu; w teście podmieniamy go na atrapę

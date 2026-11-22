@@ -2,7 +2,7 @@
 // Testy w tym pliku idą po kolei i dzielą stan (jak jedna sesja w aplikacji).
 import { test, before } from "node:test";
 import assert from "node:assert/strict";
-import { boot, db, apiCalls, bodies, errors, click, type, text, sleep, $ } from "./harness.mjs";
+import { boot, db, apiCalls, bodies, errors, spoken, click, type, text, sleep, $ } from "./harness.mjs";
 
 let w;
 const today = () => new Date().toLocaleDateString("sv-SE");
@@ -80,6 +80,8 @@ test("pierwsza lekcja: bez powtórki, gramatyka, barometr, mówienie", async () 
   await sleep(20);
   assert.equal(db.grammar.length, 1, "wzór zapisany w Mojej gramatyce");
   await click('[data-act="matBack"]'); assert.match(text(), /SŁUCHANIE/);
+  spoken.length = 0; await click('[data-act="playAll"]', 60);
+  assert.deepEqual(spoken.map(x => x.voice), ["Anna (Enhanced)", "Yannick (Enhanced)"], "kobietę czyta głos kobiecy, mężczyznę męski");
   await click('[data-act="matNext"]'); await click('[data-act="matNext"]');
   assert.equal(db.grammar.length, 1, "powrót nie dubluje gramatyki");
   assert.match(text(), /JAK POSZŁO/);

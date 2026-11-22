@@ -1,7 +1,7 @@
 // Gotowe odpowiedzi udawanego serwera /api (zamiast prawdziwego Claude'a).
 export const LESSON = { title: "Kawa w Berlinie", topic_tag: "food", intro: "Zamów kawę.",
-  lines: [{ speaker: "Barista", me: false, text: "Hallo! Was möchtest du?", translation: "Cześć! Co dla ciebie?", chunks: [{ text: "Was möchtest du", meaning: "co chcesz", how: "möchtest = forma od mögen" }] },
-          { speaker: "Bartek", me: true, text: "Ich möchte gern einen Kaffee.", translation: "Chętnie kawę.", literal: "Ja chciałbym chętnie jedną kawę.", chunks: [{ text: "Ich möchte gern", meaning: "chętnie bym", how: "" }] }],
+  lines: [{ speaker: "Barista", me: false, gender: "f", text: "Hallo! Was möchtest du?", translation: "Cześć! Co dla ciebie?", chunks: [{ text: "Was möchtest du", meaning: "co chcesz", how: "möchtest = forma od mögen" }] },
+          { speaker: "Bartek", me: true, gender: "m", text: "Ich möchte gern einen Kaffee.", translation: "Chętnie kawę.", literal: "Ja chciałbym chętnie jedną kawę.", chunks: [{ text: "Ich möchte gern", meaning: "chętnie bym", how: "" }] }],
   contrasts: [{ pl: "Chętnie wypiję kawę.", target: "Ich möchte gern einen Kaffee.", literal: "Ja chciałbym chętnie jedną kawę.", why: "Niemcy grzecznie zamawiają przez „möchte gern”, a „gern” znaczy „chętnie”." }],
   grammar: [{ title: "Czasownik na 2. miejscu", category: "word_order", rule: "Czasownik stoi na drugim miejscu.", example: "Ich möchte gern einen Kaffee.", example_tr: "Chętnie kawę.", extra: "Heute spiele ich.", extra_tr: "Dziś gram." }],
   activation: { name: "Chunk Mixer", task: "Ułóż zdanie", chunks: ["ich möchte gern"], hint: "o weekendzie" } };

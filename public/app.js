@@ -67,7 +67,7 @@ let sb = null;
 const S = {
   session: null, profile: null, langs: {}, bank: [], usage: [], doneDays: {}, view: "loading",
   auth: { mode: "login", msg: "" }, ob: { step: 0, sel: [], self: {}, idx: 0 }, pl: null,
-  sheet: null, L: null, busy: null, add: null, voice: loadLocal("staysiVoices", {}), rate: loadLocal("staysiRate", 0.95)
+  sheet: null, L: null, busy: null, add: null, voice: loadLocal("staysiVoices", {}), voiceF: loadLocal("staysiVoiceF", {}), voiceM: loadLocal("staysiVoiceM", {}), rate: loadLocal("staysiRate", 0.95)
 };
 
 /* ================= Pomocnicze ================= */
@@ -115,14 +115,37 @@ function voicesFor(lang) {
     .map(v => ({ v, s: quality(v) * 10 + (v.lang.toLowerCase().replace("_", "-") === code ? 2 : 0) + (v.localService ? 1 : 0) }))
     .sort((a, b) => b.s - a.s).map(x => x.v);
 }
-const voiceFor = lang => { const l = voicesFor(lang); return l.find(v => v.voiceURI === S.voice[lang]) || l[0] || null; };
-function speak(text, lang, onend) {
+// Płeć głosu po imieniu (przeglądarka jej nie podaje). Nieznane imię = brak płci; wtedy wybierasz ręcznie w O mnie.
+const FEMALE = new Set("anna helena petra marlene katja vicki sara samantha karen moira tessa serena kate fiona victoria allison ava susan zoe nicky martha catherine alice federica paola elsa isabella emma monica paulina marisol angelica francisca soledad lucia amelie audrey aurelie marie chantal celine zosia ewa maja agnieszka joanna kasia anja leonie clara gisela ines lisa".split(" "));
+const MALE = new Set("yannick markus martin hans conrad stefan daniel alex tom aaron arthur oliver gordon lee rishi luca diego jorge juan carlos enrique pablo thomas nicolas jacques henri krzysztof jacek marek piotr adam jan lukas jonas felix matteo giorgio cosimo".split(" "));
+const voiceBase = v => v.name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").split(/[\s(]/)[0];
+const genderOf = v => FEMALE.has(voiceBase(v)) ? "f" : MALE.has(voiceBase(v)) ? "m" : null;
+function genderVoices(lang, g) {
+  const list = voicesFor(lang), chosen = (g === "f" ? S.voiceF : S.voiceM)[lang];
+  const same = list.filter(v => v.voiceURI === chosen || genderOf(v) === g);
+  const first = same.find(v => v.voiceURI === chosen) || same[0];
+  return first ? [first, ...same.filter(v => v !== first)] : [];
+}
+const voiceFor = lang => { const l = voicesFor(lang); return l.find(v => v.voiceURI === S.voice[lang]) || genderVoices(lang, "f")[0] || l[0] || null; };
+// Głos dla postaci z dialogu: kobieta -> głos kobiecy, mężczyzna -> męski; druga postać tej samej płci dostaje drugi głos, jeśli jest
+function voiceForSpeaker(lang, lines, i) {
+  const ln = lines[i], g = ln?.gender === "f" || ln?.gender === "m" ? ln.gender : null;
+  if (!g) return null;
+  const pool = genderVoices(lang, g); if (!pool.length) return null;
+  const order = [...new Set(lines.filter(l => l.gender === g).map(l => l.speaker))];
+  return pool[Math.max(0, order.indexOf(ln.speaker)) % pool.length];
+}
+function speakLines(lines, lang, onEach, onDone) {
+  let i = 0; const next = () => { if (i >= lines.length) return onDone && onDone(); onEach && onEach(i); const j = i++; speak(lines[j].text, lang, next, voiceForSpeaker(lang, lines, j)); };
+  next();
+}
+function speak(text, lang, onend, voice) {
   try {
     if (!("speechSynthesis" in window)) { toast("Ta przeglądarka nie ma lektora."); onend && onend(); return; }
     if (!VOICES.length) loadVoices();
     speechSynthesis.cancel();
     const u = new SpeechSynthesisUtterance(text); u.lang = LANGS[lang]?.code || lang; u.rate = S.rate || 0.95;
-    const v = voiceFor(lang); if (v) { u.voice = v; u.lang = v.lang; }
+    const v = voice || voiceFor(lang); if (v) { u.voice = v; u.lang = v.lang; }
     if (onend) u.onend = onend;
     speechSynthesis.speak(u);
   } catch { onend && onend(); }
@@ -403,9 +426,12 @@ function renderMe() {
   </div>
   <div class="card"><h3>Języki i poziomy</h3>${Object.values(S.langs).map(l => `<div class="row"><span>${LANGS[l.lang].name} · <b>${band(l.score)[0]}</b> <span class="small muted">(${l.score} pkt)</span></span><button class="chip" data-act="retest" data-k="${l.lang}">Powtórz test</button></div>`).join('<div class="divider"></div>')}
     <button class="chip" data-act="addLang" style="align-self:flex-start">+ Dodaj język</button></div>
-  <div class="card"><h3>Lektor</h3>${Object.keys(S.langs).map(k => { const list = voicesFor(k), cur = voiceFor(k), best = list.length ? quality(list[0]) : 0;
-      return `<label class="f">${LANGS[k].name}<select class="field" data-voice="${k}">${list.length ? list.map(v => `<option value="${esc(v.voiceURI)}" ${cur && cur.voiceURI === v.voiceURI ? "selected" : ""}>${esc(v.name)} · ${["", "Podstawowy", "Enhanced", "Premium"][quality(v)]}</option>`).join("") : "<option>Brak głosów</option>"}</select></label>
-      ${best < 2 ? `<p class="small" style="color:var(--red)">Brak naturalnego głosu. iPhone: Settings → Accessibility → Read &amp; Speak → Voices → wybierz język i pobierz wersję Premium lub Enhanced. Android: Ustawienia → Zamiana tekstu na mowę.</p>` : ""}`; }).join("")}
+  <div class="card"><h3>Lektor</h3><p class="small muted">W dialogach kobiety czyta głos kobiecy, a mężczyzn męski. Aplikacja rozpoznaje płeć popularnych głosów po imieniu; jeśli się pomyli, zmień tutaj.</p>${Object.keys(S.langs).map(k => { const list = voicesFor(k), best = list.length ? quality(list[0]) : 0;
+      const opts = (cur) => list.length ? list.map(v => `<option value="${esc(v.voiceURI)}" ${cur && cur.voiceURI === v.voiceURI ? "selected" : ""}>${esc(v.name)} · ${["", "Podstawowy", "Enhanced", "Premium"][quality(v)]}${genderOf(v) ? (genderOf(v) === "f" ? " · ♀" : " · ♂") : ""}</option>`).join("") : "<option>Brak głosów</option>";
+      return `<p class="small" style="font-weight:800;margin-top:6px">${LANGS[k].name}</p>
+      <label class="f">Głos kobiecy<select class="field" data-voice="${k}" data-g="f">${opts(genderVoices(k, "f")[0] || list[0])}</select></label>
+      <label class="f">Głos męski<select class="field" data-voice="${k}" data-g="m">${opts(genderVoices(k, "m")[0] || list[0])}</select></label>
+      ${best < 2 ? `<p class="small" style="color:var(--red)">Brak naturalnego głosu. iPhone: Settings → Accessibility → Read &amp; Speak → Voices → wybierz język → stuknij imię → pobierz wersję Enhanced lub Premium (za darmo). Android: Ustawienia → Zamiana tekstu na mowę.</p>` : ""}`; }).join("")}
     <label class="f">Tempo: <span id="rateVal">${Math.round(S.rate * 100)}%</span><input type="range" id="rate" min="0.7" max="1.1" step="0.05" value="${S.rate}"></label></div>
   <div class="card"><h3>Przypomnienia</h3>
     <div class="row"><span>Codzienne przypomnienie</span><button class="toggle ${P.remind ? "on" : ""}" data-act="remind" aria-label="Przypomnienia" aria-pressed="${P.remind}"></button></div>
@@ -579,7 +605,12 @@ function afterRender() {
   const f = $("#authForm"); if (f) f.addEventListener("submit", onAuth);
   const ans = $("#ans"); if (ans) { ans.focus({ preventScroll: true }); ans.addEventListener("keydown", e => { if (e.key === "Enter") act("check"); }); }
   const nm = $("#name"); if (nm) nm.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); act("obNext"); } });
-  document.querySelectorAll("select[data-voice]").forEach(sel => sel.addEventListener("change", () => { S.voice[sel.dataset.voice] = sel.value; saveLocal("staysiVoices", S.voice); speak(LANGS[sel.dataset.voice].hi, sel.dataset.voice); }));
+  document.querySelectorAll("select[data-voice]").forEach(sel => sel.addEventListener("change", () => {
+    const k = sel.dataset.voice, g = sel.dataset.g, store = g === "m" ? "voiceM" : "voiceF";
+    S[store][k] = sel.value; saveLocal(g === "m" ? "staysiVoiceM" : "staysiVoiceF", S[store]);
+    if (g === "f") { S.voice[k] = sel.value; saveLocal("staysiVoices", S.voice); }
+    speak(LANGS[k].hi, k, null, voicesFor(k).find(v => v.voiceURI === sel.value));
+  }));
   const rt = $("#rate"); if (rt) rt.addEventListener("input", () => { S.rate = +rt.value; $("#rateVal").textContent = Math.round(S.rate * 100) + "%"; saveLocal("staysiRate", S.rate); });
   const pg = $("#pages"); if (pg) pg.addEventListener("change", () => onPhoto(pg.files[0]));
   Words.afterRender();
@@ -732,7 +763,7 @@ async function act(a, k, el) {
     }
     case "lessonDone": S.langView = L.lang; S.L = null; S.view = "lang"; render(); return scrollTop();
     case "introDone": L.introSeen = true; render(); return scrollTop();
-    case "playPrev": return speak((L.prev?.lines || []).map(l => l.text).join(" "), L.lang);
+    case "playPrev": stopSpeech(); return speakLines(L.prev?.lines || [], L.lang);
     case "check": return checkCard();
     case "nextCard": L.cardFb = null; L.i++; if (L.i >= L.cards.length + L.retry.length) { L.stage = "mat"; L.step = 0; } render(); return scrollTop();
     case "chunk": {
@@ -741,9 +772,9 @@ async function act(a, k, el) {
       L.tip = c; if (!L.added.includes(c.text)) { L.added.push(c.text); await addToBank(L.lang, c.text, c.meaning, line.text); }
       speak(c.text, L.lang); return render();
     }
-    case "sayLine": { const i = +k; L.hl = i; render(); return speak(L.C.lines[i].text, L.lang, () => { L.hl = -1; render(); }); }
+    case "sayLine": { const i = +k; L.hl = i; render(); return speak(L.C.lines[i].text, L.lang, () => { L.hl = -1; render(); }, voiceForSpeaker(L.lang, L.C.lines, i)); }
     case "trToggle": L.showTr[+k] = !L.showTr[+k]; return render();
-    case "playAll": { let i = 0; const next = () => { if (i >= L.C.lines.length || S.view !== "lesson" || S.L !== L) { L.hl = -1; render(); return; } L.hl = i; render(); speak(L.C.lines[i].text, L.lang, () => { i++; next(); }); }; return next(); }
+    case "playAll": { let i = 0; const next = () => { if (i >= L.C.lines.length || S.view !== "lesson" || S.L !== L) { L.hl = -1; render(); return; } L.hl = i; render(); speak(L.C.lines[i].text, L.lang, () => { i++; next(); }, voiceForSpeaker(L.lang, L.C.lines, i)); }; return next(); }
     case "matNext": stopSpeech(); L.hl = -1; L.tip = null; L.step++;
       if (L.step === matSteps(L).gram && !L.gramSaved) { L.gramSaved = true; Learn.saveFromLesson(L); }
       render(); return scrollTop();
