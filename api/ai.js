@@ -18,6 +18,11 @@ Always answer with a single JSON object and nothing else.`;
 
 // Model piszący lekcje. Domyślnie Sonnet (naturalny język); w Vercel można ustawić LESSON_MODEL=opus albo haiku.
 const LESSON_MODEL = ["haiku", "sonnet", "opus"].includes(process.env.LESSON_MODEL) ? process.env.LESSON_MODEL : "sonnet";
+// Model oceniający mówienie i poziom. Domyślnie Sonnet: ocena poziomu ma być rzetelna.
+const FEEDBACK_MODEL = ["haiku", "sonnet", "opus"].includes(process.env.FEEDBACK_MODEL) ? process.env.FEEDBACK_MODEL : "sonnet";
+// Minimalna długość odpowiedzi (słowa), od której ocena poziomu ma sens
+const MIN_WORDS = { A: 6, B: 25, C: 40 };
+export const wordCount = t => (String(t).match(/[\p{L}\p{N}'’-]+/gu) || []).length;
 
 const TOPICS = ["work", "travel", "food", "health", "home", "shopping", "errands", "hobbies", "tech", "culture", "relationships", "education", "nature", "society"];
 const SIZE = {
@@ -81,11 +86,11 @@ export default async function handler(req, res) {
     if (action === "placement_questions") {
       await checkLimits(db, uid, action);
       const L = LANG[body.lang]; const lvl = level(Number(body.self_score) || 44);
-      const parsed = await claudeJson(db, { userId: uid, model: "sonnet", purpose: "placement", lang: body.lang, maxTokens: 2000,
+      const parsed = await claudeJson(db, { userId: uid, model: "sonnet", purpose: "placement", lang: body.lang, maxTokens: 3500,
         system: METHOD,
         messages: [{ role: "user", content: `Create a short placement test for ${L}. The learner rates themselves around ${lvl}. Native language: ${native}.
-Return JSON {"questions":[{"q":string,"options":[string,string,string],"correct":0|1|2}], "writing_prompt": string}.
-Make 4 multiple-choice questions spanning one level below to one level above ${lvl} (reading comprehension, grammar in context, vocabulary in context).
+Return JSON {"questions":[{"q":string,"options":[string,string,string],"correct":0|1|2,"level":string}], "writing_prompt": string}.
+Make 8 multiple-choice questions, 2 at each of four CEFR levels: one level below ${lvl}, ${lvl} itself, one level above and two levels above. Mix reading comprehension, grammar in context and vocabulary in context; each question tests real understanding, with plausible wrong options. Order them from easiest to hardest. Add "level": the CEFR level each question targets.
 Write instructions in ${native}; target-language content in ${L}. The writing prompt asks for 3-5 sentences about themselves, in ${native}.` }] });
       return send(res, 200, parsed);
     }
@@ -96,8 +101,9 @@ Write instructions in ${native}; target-language content in ${L}. The writing pr
       const parsed = await claudeJson(db, { userId: uid, model: "sonnet", purpose: "placement", lang: body.lang, maxTokens: 400,
         system: METHOD,
         messages: [{ role: "user", content: `Grade this ${L} placement test against CEFR descriptors. Self-rating score: ${body.self_score} on the 10-90 Global Scale of English style scale (A1 22-29, A2 30-35, A2+ 36-42, B1 43-50, B1+ 51-58, B2 59-66, B2+ 67-75, C1 76-84, C2 85-90).
-Multiple-choice results: ${JSON.stringify(body.answers || []).slice(0, 2000)}
+Multiple-choice results: ${JSON.stringify(body.answers || []).slice(0, 4000)}
 Writing sample: """${String(body.writing || "").slice(0, 1500)}"""
+Method: (1) find the highest level at which the learner answered both questions correctly and check consistency below it; (2) rate the writing sample as a strict CEFR examiner on range, accuracy, coherence and task fulfilment (a very short sample cannot show a high level); (3) combine both, giving the writing more weight than guessable multiple choice; use the self-rating only to break ties.
 Return JSON {"score": integer 22-90, "reason": one or two sentences in ${native} explaining the level}.` }] });
       const out = parsed; out.score = Math.max(22, Math.min(90, Math.round(Number(out.score) || 22)));
       await db.from("user_languages").upsert({ user_id: uid, lang: body.lang, score: out.score }, { onConflict: "user_id,lang" });
@@ -180,7 +186,7 @@ Return JSON:
  "lines": [{"speaker": string, "me": boolean, "gender": "f" or "m" for the speaker (for the learner's own lines guess from the learner's name; "" for narration), "text": string in ${L}, "translation": string in ${native},${md === "A" ? ` "literal": word-for-word ${native} or "",` : ""} "chunks": [{"text": exact substring of text, "meaning": short meaning in ${native}, "how": one short line in ${native} on how the chunk is built (form, ending, word order; ALWAYS name irregular forms, e.g. "ging = czas przeszły od gehen, nieregularny"), "" if there is nothing to explain}]}],
  "contrasts": [0-4 items, ONLY for sentences from the lines where ${L} says it genuinely differently from ${native} (word order, a different verb or preposition, an idiom, a habit native speakers have). Skip anything that is said the same way; an empty list is fine. Each item {"pl": how a ${native} speaker would naturally say it, "target": the ${L} sentence or fragment copied EXACTLY from the lines, "literal": word-for-word ${native} mirroring the ${L} structure, "why": 1-2 simple sentences in ${native}, at the learner's level, explaining why ${L} speakers say it this way (the rule, the habit or the logic), so the learner can say it like a native}],
  "grammar": [2-3 items {"title": short name of the pattern in ${native}, max 6 words, "category": one of "word_order","verbs","nouns","adjectives","prepositions","pronouns","other", "rule": 1-2 simple sentences in ${native} at the learner's level, "example": one sentence copied EXACTLY from the lines that shows it, "example_tr": its translation in ${native}, "extra": one more short ${L} example at the learner's level, "extra_tr": its translation}],
- "activation": {"name": "${md === "A" ? "Chunk Mixer" : md === "B" ? "Language Islands" : "Progressive Compression"}", "task": instruction in ${native} following ${activation}, "chunks": [2-3 chunks to use], "hint": short hint in ${native}}}`;
+ "activation": {"name": "${md === "A" ? "Chunk Mixer" : md === "B" ? "Language Islands" : "Progressive Compression"}", "task": ${md === "A" ? `instruction in ${native}` : `instruction written in ${L} (immersion from B1 up: simple, clear ${L} at the learner's level)`} following ${activation}, ${md === "A" ? "" : `"task_native": the same instruction in ${native}, `}"chunks": [2-3 chunks to use], "hint": short hint in ${md === "A" ? native : L}}}`;
       const parsed = await claudeJson(db, { userId: uid, model: LESSON_MODEL, purpose: "lesson", lang, maxTokens: 6000, system: METHOD, messages: [{ role: "user", content: prompt }] });
       const content = parsed; content.mode = md; content.level = lvl;
       await naturalize(db, { userId: uid, lang, L, native, content });
@@ -217,12 +223,21 @@ Accept it if it is correct and natural even if different from the expected answe
       const L = LANG[body.lang];
       const answer = Array.isArray(body.rounds) ? body.rounds.map((r, i) => `Round ${i + 1}: ${String(r).slice(0, 2000)}`).join("\n") : String(body.answer || "").slice(0, 3000);
       const { data: ul } = await db.from("user_languages").select("score").eq("user_id", uid).eq("lang", body.lang).single();
-      const parsed = await claudeJson(db, { userId: uid, purpose: "feedback", lang: body.lang, maxTokens: 1200, system: METHOD,
-        messages: [{ role: "user", content: `Learner level ${level(ul?.score || 22)}, ${L}. Task: ${String(body.task).slice(0, 500)}
+      const md = mode(ul?.score || 22), lastRound = Array.isArray(body.rounds) ? String(body.rounds[0] || "") : String(body.answer || "");
+      const enough = wordCount(lastRound) >= MIN_WORDS[md];
+      const parsed = await claudeJson(db, { userId: uid, model: FEEDBACK_MODEL, purpose: "feedback", lang: body.lang, maxTokens: 1500, system: METHOD,
+        messages: [{ role: "user", content: `Learner's current level ${level(ul?.score || 22)}, ${L}. Task: ${String(body.task).slice(0, 500)}
 Learner's answer:\n${answer}
-Give feedback in ${native}, "express over impress": praise first, then only the 2-3 most important fixes.
-Return JSON {"praise": string, "corrected": improved natural version in ${L} (of the last round if there are rounds), "fixes": [2-3 short explanations], "more": [other minor fixes, may be empty], "new_chunks": [{"text": useful chunk from the corrected version, "meaning": in ${native}}], "mistake_note": one short note about the most typical mistake or "", "score_estimate": integer 10-90 for this answer on the same scale (A1 22-29 ... C2 85-90)}.` }] });
+The answer may come from speech dictation: obviously misheard words (sound-alikes, e.g. "rabbit" for "Revit") are not the learner's mistakes; fix them silently in "corrected".
+${body.clarification ? `The learner clarifies what they meant: """${String(body.clarification).slice(0, 500)}""". Take this into account: interpret the answer as they meant it and correct it accordingly. Mention briefly in "praise" that you took the clarification into account.\n` : ""}Give feedback in ${native}, "express over impress": praise first, then only the 2-3 most important fixes.
+LEVEL ESTIMATE: be a strict, calibrated CEFR examiner. Judge only what this answer actually shows, using the CEFR spoken/written production descriptors:
+A1 isolated words and memorised phrases · A2 simple sentences about routine matters, linked with "and/but/because" · B1 connected text on familiar topics, can narrate and briefly explain opinions, noticeable errors that rarely block meaning · B2 clear, detailed text, can argue pros and cons, good grammatical control, few errors · C1 fluent, flexible, precise, wide range including idiomatic language · C2 effortless, nuanced, near-native.
+Rate four criteria (range, accuracy, fluency/coherence, task fulfilment) and give one overall score on the scale A1 22-29, A2 30-35, A2+ 36-42, B1 43-50, B1+ 51-58, B2 59-66, B2+ 67-75, C1 76-84, C2 85-90.
+A short or very simple task cannot show a high level: never rate above what the answer demonstrates. ${enough ? "" : "This answer is too short to judge the level: return score_estimate null."}
+Return JSON {"praise": string, "corrected": improved natural version in ${L} (of the last round if there are rounds), "fixes": [2-3 short explanations], "more": [other minor fixes, may be empty], "new_chunks": [{"text": useful chunk from the corrected version, "meaning": in ${native}}], "mistake_note": one short note about the most typical mistake or "", "criteria": {"range": band, "accuracy": band, "fluency": band, "task": band}, "score_estimate": integer or null, "estimate_reason": one short sentence in ${native} explaining the level shown}.` }] });
       const out = parsed;
+      if (!enough) { out.score_estimate = null; out.estimate_reason = out.estimate_reason || "Odpowiedź była za krótka, żeby ocenić poziom."; }
+      else if (out.score_estimate != null) out.score_estimate = Math.max(10, Math.min(90, Math.round(Number(out.score_estimate)) || 0)) || null;
       if (out.mistake_note) await db.from("mistakes").insert({ user_id: uid, lang: body.lang, note: String(out.mistake_note).slice(0, 300) });
       return send(res, 200, out);
     }

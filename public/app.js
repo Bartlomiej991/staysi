@@ -247,9 +247,24 @@ function render() {
   if (S.add) html += renderAdd();
   if (S.busy) html += `<div class="busy" role="status" aria-live="polite"><div class="spinner"></div><h2>${esc(S.busy)}</h2></div>`;
   if (rec) stopDictation();
+  // Ten sam ekran po przerysowaniu zostaje w tym samym miejscu (np. po stuknięciu zwrotu), nowy ekran zaczyna od góry
+  const key = screenKey(), old = document.querySelector(".screen"), top = old && key === lastKey ? old.scrollTop : 0;
   app.innerHTML = html;
+  lastKey = key; if (top) { const sc = document.querySelector(".screen"); if (sc) sc.scrollTop = top; }
   afterRender();
   syncHistory();
+}
+let lastKey = "";
+function screenKey() {
+  return [S.view, S.L && `${S.L.stage}:${S.L.step}:${S.L.idx ?? ""}`, S.ob && S.view === "ob" && S.ob.step, S.pl && S.view === "placement" && `${S.pl.step}:${S.pl.qi}`,
+    S.W && S.view === "words" && `${S.W.intro}:${S.W.pos}`, S.view === "main" && S.tab].join("|");
+}
+// Podświetlenie czytanej kwestii bez przerysowania ekranu + płynne przewijanie za lektorem
+function setHl(i) {
+  if (S.L) S.L.hl = i;
+  document.querySelectorAll("[data-line]").forEach(el => el.classList.toggle("hl", Number(el.dataset.line) === i));
+  const cur = document.querySelector(`[data-line="${i}"]`);
+  if (cur && cur.scrollIntoView) { try { cur.scrollIntoView({ behavior: "smooth", block: "center" }); } catch { try { cur.scrollIntoView(); } catch {} } }
 }
 const scrollTop = () => { const s = document.querySelector(".screen"); if (s) s.scrollTop = 0; };
 const CTX = { S, get sb() { return sb; }, ai, esc, speak, toast, withBusy, render, scrollTop, day, uid, LANGS, flag, band, pct, nextBand, I };
@@ -371,7 +386,7 @@ function renderHome() {
     return `<div style="display:flex;flex-direction:column;${right ? "align-items:flex-end" : ""}">
       <div class="bubble lang ${right ? "right tilt-r" : "tilt-l"}" style="background:${t.bg};color:${t.fg};${right ? "width:88%" : ""}">
         <div class="row"><span class="hi" style="display:flex;align-items:center;gap:10px">${flag(l.lang, 34)}${LANGS[l.lang].hi}</span><b>${band(l.score)[0]}</b></div>
-        <span style="font-weight:600">${LANGS[l.lang].name} · ${pct(l.score)}% drogi do ${nextBand(l.score)}</span>
+        <span style="font-weight:600">${LANGS[l.lang].name} · ${l.score} pkt · ${pct(l.score)}% drogi do ${nextBand(l.score)}</span>
         <div class="bar" aria-hidden="true"><i style="width:${pct(l.score)}%"></i></div>
         ${done ? `<span class="stamp">ZROBIONE DZIŚ</span>` : ""}
         ${Words.dueCount(l.lang) ? `<span class="small" style="font-weight:700">${Words.dueCount(l.lang)} słówek czeka na powtórkę</span>` : ""}
@@ -549,10 +564,10 @@ function renderMat() {
   const label = isC ? ["CZYTANIE", "SŁUCHANIE"][step] : ["KROK 1 · TŁUMACZENIE", "KROK 2 · ORYGINAŁ", "KROK 3 · SŁUCHANIE"][step];
   let body = "";
   if (isC) {
-    body = C.lines.map((ln, i) => `<div class="para ${L.hl === i ? "hl" : ""}"><div style="flex:1">${chunked(ln)}${L.showTr[i] ? `<span class="tr">${esc(ln.translation)}</span>` : ""}</div>
+    body = C.lines.map((ln, i) => `<div class="para ${L.hl === i ? "hl" : ""}" data-line="${i}"><div style="flex:1">${chunked(ln)}${L.showTr[i] ? `<span class="tr">${esc(ln.translation)}</span>` : ""}</div>
       <div class="tools"><button class="spk" data-act="sayLine" data-k="${i}" aria-label="Odsłuchaj akapit">${I.speaker}</button><button class="spk" data-act="trToggle" data-k="${i}" aria-label="Pokaż tłumaczenie" style="font-size:11px;font-weight:800">PL</button></div></div>`).join("");
   } else {
-    body = C.lines.map((ln, i) => `<div class="msg ${ln.me ? "me" : ""} ${L.hl === i ? "hl" : ""}"><span class="who">${esc(ln.speaker)}</span>
+    body = C.lines.map((ln, i) => `<div class="msg ${ln.me ? "me" : ""} ${L.hl === i ? "hl" : ""}" data-line="${i}"><span class="who">${esc(ln.speaker)}</span>
       <div class="b"><span>${step === 0 ? `${esc(ln.translation)}${ln.literal ? `<span class="lit">dosłownie: ${esc(ln.literal)}</span>` : ""}` : chunked(ln)}</span>${step > 0 ? `<button class="spk" data-act="sayLine" data-k="${i}" aria-label="Odsłuchaj">${I.speaker}</button>` : ""}</div></div>`).join("");
   }
   const tip = L.tip ? `<div class="tip"><b>${esc(L.tip.text)}</b> = ${esc(L.tip.meaning)}${L.tip.how ? `<br><span class="how">${esc(L.tip.how)}</span>` : ""}<br><span class="small">Zapisane w twoim banku</span></div>` : "";
@@ -576,7 +591,12 @@ function renderAct() {
         <p style="font-family:var(--display);font-weight:800;font-size:21px;line-height:1.25">${esc(f.corrected)}</p>
         <button class="pillbtn" style="background:var(--sun);color:var(--ink);align-self:flex-start" data-act="sayFix">${I.speaker} Odsłuchaj</button></div></div>
       <div class="fixes">${(f.fixes || []).map((x, i) => `<div style="display:flex;gap:12px"><span class="num">${i + 1}</span><p class="small" style="font-size:15px">${esc(x)}</p></div>`).join("")}
-        ${(f.more || []).length ? (L.showMore ? `<p class="small muted">${(f.more || []).map(esc).join("<br>")}</p>` : `<a href="#" data-act="showMore">Pokaż wszystkie poprawki</a>`) : ""}</div></div>
+        ${f.score_estimate ? `<p class="small muted" style="margin-top:4px">Poziom tej odpowiedzi: <b>${band(f.score_estimate)[0]}</b> (${f.score_estimate} pkt)${f.estimate_reason ? ` · ${esc(f.estimate_reason)}` : ""}</p>` : f.estimate_reason ? `<p class="small muted">${esc(f.estimate_reason)}</p>` : ""}
+        ${(f.more || []).length ? (L.showMore ? `<p class="small muted">${(f.more || []).map(esc).join("<br>")}</p>` : `<a href="#" data-act="showMore">Pokaż wszystkie poprawki</a>`) : ""}</div>
+      <div class="card" style="background:#fff">
+        <label class="f">Coś się nie zgadza? Doprecyzuj, co miałeś na myśli<textarea class="field" id="clarify" placeholder="np. nie chodziło mi o „rabbit family”, tylko o Revit family">${esc(L.clarify || "")}</textarea></label>
+        ${(L.clarified || 0) < 3 ? `<button class="btn btn-ghost" style="color:var(--ink)" data-act="clarify">Popraw z tym wyjaśnieniem</button>` : `<p class="small muted">Limit wyjaśnień w tej lekcji wykorzystany.</p>`}
+      </div></div>
       <div class="footer"><button class="btn btn-coral" data-act="finish">Zakończ lekcję</button></div>`;
   }
   const r = (L.rounds || []).length;
@@ -584,10 +604,23 @@ function renderAct() {
     <p class="small muted">${r === 0 ? "Mów albo pisz swobodnie przez około 3 minuty." : r === 1 ? "Ta sama treść w 2 minuty. Wyrzuć mniej ważne rzeczy." : "Ostatnia runda: 1 minuta, tylko sedno."}</p>` : "";
   return `<div class="screen"><span class="sticker st-coral">MÓWIENIE · ${esc((A.name || "").toUpperCase())}</span>
     <h2 style="font-size:28px">${esc(A.task)}</h2>
+    ${A.task_native ? `<div class="row" style="justify-content:flex-start;gap:8px"><button class="pillbtn" style="background:var(--ink);color:#fff" data-act="sayTask">${I.speaker} Odsłuchaj</button><button class="pillbtn" style="background:transparent;border:2px solid currentColor" data-act="taskPl">${L.taskPl ? "Ukryj PL" : "PL"}</button></div>${L.taskPl ? `<p class="small">${esc(A.task_native)}</p>` : ""}` : ""}
     ${(A.chunks || []).length ? `<div class="chips">${A.chunks.map(c => `<span class="chip sel">${esc(c)}</span>`).join("")}</div>` : ""}
     ${A.hint ? `<p class="small muted">${esc(A.hint)}</p>` : ""}${roundInfo}
     <div class="answer"><textarea class="field" id="act" placeholder="Napisz albo podyktuj…"></textarea><button class="mic" data-act="mic" data-k="act" aria-label="Odpowiedz głosem">${I.mic}</button></div></div>
     <div class="footer twobtn">${r === 0 ? backBtn("actBack", "var(--ink)") : ""}<button class="btn btn-coral" data-act="actSend">${isC && r < 2 ? `Gotowe, runda ${r + 2}` : "Sprawdź z Claude"}</button></div>`;
+}
+// Przejrzysta informacja o poziomie: ile punktów i dlaczego
+function levelLine(L) {
+  const v = L.lvl; if (!v) return "";
+  const d = v.to - v.from, sign = d > 0 ? "+" : "";
+  const head = d ? `Poziom: ${v.from} → <b>${v.to} pkt</b> (${sign}${d})` : `Poziom bez zmian: <b>${v.to} pkt</b>`;
+  const why = v.why === "none" ? "Ta odpowiedź była za krótka, żeby ocenić poziom."
+    : v.calib ? `Kalibracja ${Math.min(v.n, 5)} z 5: wynik to średnia z testu i Twoich dotychczasowych wypowiedzi. Każda kolejna lekcja zmienia go trochę mniej.`
+    : v.why === "need-more" ? "Awans przychodzi z kilku lekcji na co najmniej 2 różne tematy. Jeszcze trochę."
+    : v.why === "up" ? "Kilka ostatnich lekcji z różnych tematów było powyżej Twojego wyniku."
+    : "Ostatnie lekcje są na poziomie Twojego wyniku. Wynik nigdy nie spada.";
+  return `<div class="card" style="position:relative;background:rgba(255,255,255,.1);color:#fff;border:0"><p>${head} · ${band(v.to)[0]}</p><p class="small" style="opacity:.85">${why}</p></div>`;
 }
 function renderSum() {
   const L = S.L, st = streak(), q = quote(), due = S.bank.filter(b => b.lang === L.lang && b.introduced !== false && b.due <= day(1)).length;
@@ -600,6 +633,7 @@ function renderSum() {
       <div class="bubble tilt-l" style="align-self:flex-start;background:var(--mint);color:#0B3D25;padding:12px 18px"><b style="font-family:var(--display);font-size:30px">${L.added.length}</b> nowych zwrotów</div>
       ${L.first ? "" : `<div class="bubble right tilt-r" style="align-self:flex-end;background:var(--sky);color:#10265E;padding:12px 18px"><b style="font-family:var(--display);font-size:30px">${L.ok}/${L.total}</b> powtórek dobrze</div>`}
       <div class="bubble tilt-l" style="align-self:flex-start;background:var(--coral-2);color:#4A1405;padding:12px 18px"><b style="font-family:var(--display);font-size:30px">1</b> zadanie z mówienia</div></div>
+    ${levelLine(L)}
     <div class="btn-ghost" style="border-radius:20px;padding:10px 16px;color:var(--lilac);position:relative">Jutro czeka <b style="color:var(--sun)">${due}</b> zwrotów do powtórki</div>
     <div class="card" style="position:relative;background:rgba(255,255,255,.1);color:#fff;border:0">
       <label class="f" style="color:#fff">Co poprawić w następnej lekcji? (opcjonalnie)<textarea class="field" id="nextNote" placeholder="np. kwestie się nie łączyły, brzmiało sztucznie, za łatwe słownictwo">${esc(L.note || "")}</textarea></label>
@@ -786,9 +820,9 @@ async function act(a, k, el) {
       L.tip = c; if (!L.added.includes(c.text)) { L.added.push(c.text); await addToBank(L.lang, c.text, c.meaning, line.text); }
       speak(c.text, L.lang); return render();
     }
-    case "sayLine": { const i = +k; L.hl = i; render(); return speak(L.C.lines[i].text, L.lang, () => { L.hl = -1; render(); }, voiceForSpeaker(L.lang, L.C.lines, i)); }
+    case "sayLine": { const i = +k; setHl(i); return speak(L.C.lines[i].text, L.lang, () => setHl(-1), voiceForSpeaker(L.lang, L.C.lines, i)); }
     case "trToggle": L.showTr[+k] = !L.showTr[+k]; return render();
-    case "playAll": { let i = 0; const next = () => { if (i >= L.C.lines.length || S.view !== "lesson" || S.L !== L) { L.hl = -1; render(); return; } L.hl = i; render(); speak(L.C.lines[i].text, L.lang, () => { i++; next(); }, voiceForSpeaker(L.lang, L.C.lines, i)); }; return next(); }
+    case "playAll": { let i = 0; const next = () => { if (i >= L.C.lines.length || S.view !== "lesson" || S.L !== L) { setHl(-1); return; } setHl(i); speak(L.C.lines[i].text, L.lang, () => { i++; next(); }, voiceForSpeaker(L.lang, L.C.lines, i)); }; return next(); }
     case "matNext": stopSpeech(); L.hl = -1; L.tip = null; L.step++;
       if (L.step === matSteps(L).gram && !L.gramSaved) { L.gramSaved = true; Learn.saveFromLesson(L); }
       render(); return scrollTop();
@@ -802,6 +836,9 @@ async function act(a, k, el) {
       L.stage = "act"; render(); return scrollTop();
     }
     case "actSend": return sendActivation();
+    case "clarify": return sendClarify();
+    case "sayTask": return speak(L.C.activation?.task || "", L.lang);
+    case "taskPl": L.taskPl = !L.taskPl; return render();
     case "sayFix": return speak(L.fb.corrected, L.lang);
     case "showMore": L.showMore = true; return render();
     case "finish": return finishLesson();
@@ -870,7 +907,7 @@ async function plNext() {
   if (p.step === "write") {
     p.writing = $("#plWrite").value;
     return withBusy("Claude sprawdza twój poziom…", async () => {
-      const answers = p.questions.map((q, i) => ({ q: q.q, chosen: q.options[p.answers[i]], correct: q.options[q.correct] }));
+      const answers = p.questions.map((q, i) => ({ level: q.level || "", q: q.q, chosen: q.options[p.answers[i]], correct: q.options[q.correct], ok: p.answers[i] === q.correct }));
       const r = await ai("placement_grade", { lang: p.lang, self_score: SELF[p.self].s, answers, writing: p.writing });
       await finishPlacement(r.score, r.reason);
     });
@@ -936,18 +973,33 @@ async function sendActivation() {
   await reloadUsage(); render(); scrollTop();
 }
 
+// Doprecyzowanie odpowiedzi (np. dyktowanie usłyszało "rabbit" zamiast "Revit"): Claude poprawia jeszcze raz
+async function sendClarify() {
+  const L = S.L, isC = L.C.mode === "C", note = ($("#clarify")?.value || "").trim();
+  if (!note) return toast("Napisz, co miałeś na myśli.");
+  L.clarify = note;
+  const r = await withBusy("Claude poprawia jeszcze raz…", () => ai("feedback", { lang: L.lang, task: L.C.activation?.task || "", clarification: note, ...(isC ? { rounds: L.rounds } : { answer: L.answer }) }));
+  if (!r) return render();
+  L.fb = r; L.clarified = (L.clarified || 0) + 1; L.clarify = "";
+  for (const c of (r.new_chunks || []).slice(0, 4)) { if (await addToBank(L.lang, c.text, c.meaning, r.corrected)) L.added.push(c.text); }
+  L.estimate = Number(r.score_estimate) || L.estimate;
+  await reloadUsage(); render(); scrollTop();
+}
+
 async function finishLesson() {
   const L = S.L, ul = S.langs[L.lang];
   await withBusy("Zapisuję postęp…", async () => {
-    let score = ul.score;
+    let score = ul.score, why = "none";
+    const calib = (ul.lessons_done || 0) < 5;
     if (L.estimate) {
       // Poziom liczony z kilku lekcji: mediana z ostatnich 5 ocen, awans tylko gdy były co najmniej 2 różne tematy
       const est = Math.max(10, Math.min(90, L.estimate)), topic = L.C.topic_tag || null;
       (S.rated = S.rated || []).unshift({ lang: L.lang, topic, estimate: est });
-      score = Learn.nextScore(ul, S.rated.filter(r => r.lang === L.lang)).score;
+      const ns = Learn.nextScore(ul, S.rated.filter(r => r.lang === L.lang)); score = ns.score; why = ns.why;
       sb.from("lessons").update({ estimate: est, topic }).eq("id", L.id).then(() => {}, () => {});
     }
     const before = band(ul.score)[0];
+    L.lvl = { from: ul.score, to: score, why, calib, n: (ul.lessons_done || 0) + 1 };
     ul.score = score; ul.lessons_done = (ul.lessons_done || 0) + 1;
     await Promise.all([
       sb.from("user_languages").update({ score, lessons_done: ul.lessons_done }).eq("id", ul.id),

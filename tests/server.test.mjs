@@ -55,3 +55,9 @@ test("dzienny limit liczy lekcje, a nie zapytania do Claude'a", async () => {
   await assert.doesNotReject(checkLimits(fake(3), "u", "lesson"), "20 zapytań, ale 3 lekcje: można dalej");
   await assert.rejects(checkLimits(fake(12), "u", "lesson"), /Dzienny limit to 12 lekcji/);
 });
+
+test("liczenie słów do oceny poziomu", async () => {
+  const { wordCount } = await import("../api/ai.js");
+  assert.equal(wordCount("Am Wochenende möchte ich gern schwimmen."), 6);
+  assert.equal(wordCount("I'm a BIM modeller, it's fun!"), 6);
+});

@@ -7,9 +7,20 @@ const r = (...pairs) => pairs.map(([estimate, topic]) => ({ estimate, topic }));
 
 test("mediana", () => { assert.equal(median([70, 45, 46]), 46); assert.equal(median([50, 60]), 55); });
 
-test("kalibracja (lekcje 1–5) przesuwa wynik o 40% w obie strony", () => {
-  assert.equal(nextScore({ score: 50, lessons_done: 2 }, r([60, "work"])).score, 54);
-  assert.equal(nextScore({ score: 50, lessons_done: 2 }, r([40, "work"])).score, 46);
+test("kalibracja: bieżąca średnia z testu i ocen, coraz mniejsze kroki", () => {
+  assert.equal(nextScore({ score: 44, lessons_done: 0 }, r([54, "work"])).score, 49, "1. lekcja: pół na pół z testem");
+  assert.equal(nextScore({ score: 50, lessons_done: 2 }, r([60, "work"])).score, 53, "3. lekcja: nowa ocena waży 1/4");
+  assert.equal(nextScore({ score: 50, lessons_done: 2 }, r([40, "work"])).score, 48, "działa też w dół");
+});
+
+test("kalibracja: jedna skrajna ocena liczy się najwyżej jako 12 pkt od wyniku", () => {
+  assert.equal(nextScore({ score: 44, lessons_done: 0 }, r([85, "work"])).score, 50);
+});
+
+test("kalibracja: kilka zgodnych ocen doprowadza wynik blisko prawdy", () => {
+  let ul = { score: 30, lessons_done: 0 };
+  for (let i = 0; i < 5; i++) ul = { score: nextScore(ul, r([48, "work"])).score, lessons_done: i + 1 };
+  assert.ok(ul.score >= 44 && ul.score <= 48, `po 5 lekcjach wynik ${ul.score} jest blisko 48`);
 });
 
 test("po kalibracji: jeden temat nie daje awansu", () => {
@@ -36,3 +47,4 @@ test("jedna świetna lekcja wśród słabszych nie daje awansu", () => {
 test("po kalibracji wynik nigdy nie spada", () => {
   assert.equal(nextScore({ score: 50, lessons_done: 10 }, r([30, "work"], [30, "health"], [30, "food"])).score, 50);
 });
+

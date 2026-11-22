@@ -86,7 +86,8 @@ test("pierwsza lekcja: bez powtórki, gramatyka, barometr, mówienie", async () 
   assert.equal(db.grammar.length, 1, "wzór zapisany w Mojej gramatyce");
   await click('[data-act="matBack"]'); assert.match(text(), /SŁUCHANIE/);
   spoken.length = 0; await click('[data-act="playAll"]', 60);
-  assert.deepEqual(spoken.map(x => x.voice), ["Anna (Enhanced)", "Yannick (Enhanced)"], "kobietę czyta głos kobiecy, mężczyznę męski");
+  await sleep(100);
+  assert.deepEqual(spoken.slice(0, 2).map(x => x.voice), ["Anna (Enhanced)", "Yannick (Enhanced)"], "kobietę czyta głos kobiecy, mężczyznę męski");
   await click('[data-act="matNext"]'); await click('[data-act="matNext"]');
   assert.equal(db.grammar.length, 1, "powrót nie dubluje gramatyki");
   assert.match(text(), /JAK POSZŁO/);
@@ -95,8 +96,14 @@ test("pierwsza lekcja: bez powtórki, gramatyka, barometr, mówienie", async () 
   assert.equal(db.user_languages.find(l => l.lang === "de").difficulty_shift, 1, "ponowny wybór barometru się nie sumuje");
   await type("#act", "Am Wochenende ich möchte gern spielen"); await click('[data-act="actSend"]', 80);
   assert.match(text(), /Am Wochenende möchte ich gern spielen/);
+  await type("#clarify", "chodziło mi o pływanie");
+  await click('[data-act="clarify"]', 80);
+  assert.equal(bodies.filter(b => b.action === "feedback").at(-1).clarification, "chodziło mi o pływanie", "wyjaśnienie trafia do Claude'a");
+  assert.equal(bodies.filter(b => b.action === "feedback").at(-1).answer, "Am Wochenende ich möchte gern spielen", "razem z pierwotną odpowiedzią");
   await click('[data-act="finish"]', 80);
   assert.match(text(), /Brawo/);
+  assert.match(text(), /Poziom: 22 → 26 pkt \(\+4\)/, "koniec lekcji pokazuje zmianę w punktach");
+  assert.match(text(), /Kalibracja 1 z 5/);
   await type("#nextNote", "kwestie się nie łączyły");
   await click('[data-act="saveNote"]');
   assert.match(db.profiles[0].style_notes, /• kwestie się nie łączyły/, "uwaga po lekcji trafia do uwag dla Claude'a");

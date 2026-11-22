@@ -104,10 +104,19 @@ test("wygląd: lekcja od początku do końca", { skip }, async () => {
   await check("lekcja-tlumaczenie"); await click('[data-act="matNext"]');
   await click('[data-act="chunk"]', 200); await check("lekcja-oryginal-zwrot");
   await click('[data-act="matNext"]'); await check("lekcja-sluchanie");
+  // podczas "Odtwórz całość" ekran przewija się za czytaną kwestią i nie skacze na górę
+  await page.evaluate(() => { const sc = document.querySelector(".screen"); sc.scrollTop = sc.scrollHeight; });
+  const before = await page.evaluate(() => document.querySelector(".screen").scrollTop);
+  await page.evaluate(() => { window.speechSynthesis.speak = u => setTimeout(() => u.onend && u.onend(), 30); });
+  await click('[data-act="playAll"]', 600);
+  const after = await page.evaluate(() => ({ top: document.querySelector(".screen").scrollTop, hl: document.querySelectorAll(".hl").length }));
+  assert.ok(before > 0, "lekcja jest dłuższa niż ekran");
+  assert.ok(after.top > 0, "ekran nie wraca na górę w trakcie czytania");
   await click('[data-act="matNext"]', 200); await check("lekcja-gramatyka");
   await click('[data-act="matNext"]'); await check("lekcja-barometr");
   await click('[data-act="baro"][data-k="0"]', 200); await check("lekcja-mowienie");
   await fill("#act", "Am Wochenende möchte ich gern schwimmen."); await click('[data-act="actSend"]', 400); await check("lekcja-poprawka");
+  await fill("#clarify", "chodziło mi o pływanie"); await click('[data-act="clarify"]', 400); await check("lekcja-doprecyzowanie");
   await click('[data-act="finish"]', 500); await check("lekcja-koniec");
   await click('[data-act="lessonDone"]', 200);
 });

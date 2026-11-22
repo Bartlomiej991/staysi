@@ -11,7 +11,13 @@ export function nextScore(ul, recent) {
   const last = recent.slice(0, 5), est = last.map(r => r.estimate), score = ul.score;
   if (!est.length) return { score, why: "" };
   const med = median(est), topics = new Set(last.map(r => r.topic).filter(Boolean)).size;
-  if ((ul.lessons_done || 0) < 5) return { score: Math.max(22, Math.min(90, Math.round(score + (med - score) * 0.4))), why: "calibration" };
+  // Kalibracja (lekcje 1-5): wynik to bieżąca średnia z testu i wszystkich ocen mówienia.
+  // Po n-tej lekcji nowa ocena waży 1/(n+1): na początku szybko poprawia błąd testu, potem coraz mniej skacze.
+  // Pojedyncza ocena liczy się najwyżej jako 12 pkt od obecnego wyniku (odporność na jedną dziwną ocenę).
+  if ((ul.lessons_done || 0) < 5) {
+    const n = (ul.lessons_done || 0) + 1, e = Math.max(score - 12, Math.min(score + 12, est[0]));
+    return { score: Math.max(22, Math.min(90, score + Math.round((e - score) / (n + 1)))), why: "calibration" };
+  }
   if (est.length < 3 || topics < 2) return { score, why: "need-more" };
   if (med > score) return { score: Math.min(90, score + (med >= score + 8 ? 2 : 1)), why: "up" };
   return { score, why: "hold" };
