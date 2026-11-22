@@ -13,6 +13,7 @@ export const db = { profiles: [{ id: "u1", name: "", name_vocative: "", native: 
   user_languages: [], bank: [], lessons: [], usage: [], grammar: [], mistakes: [] };
 export const apiCalls = [];
 export const bodies = [];
+export const ttsBodies = [];
 let nextId = 1;
 
 function table(name) {
@@ -36,7 +37,8 @@ import { LESSON, fakeAnswer } from "./fake-api.mjs";
 export { LESSON };
 
 async function fakeApi(url, opt = {}) {
-  if (url === "/api/config") return { ok: true, json: async () => ({ supabaseUrl: "x", supabaseAnonKey: "y" }) };
+  if (url === "/api/config") return { ok: true, json: async () => ({ supabaseUrl: "x", supabaseAnonKey: "y", cloudVoice: !!globalThis.__cloud }) };
+  if (url === "/api/tts") { ttsBodies.push(JSON.parse(opt.body)); return { ok: true, blob: async () => new Blob(["mp3"]), json: async () => ({}) }; }
   const body = JSON.parse(opt.body), a = body.action; apiCalls.push(a); bodies.push(body);
   const out = fakeAnswer(a, body);
   db.usage.push({ cost_usd: 0.001, purpose: a, model: "claude-haiku", lang: body.lang || null, input_tokens: 100, output_tokens: 10, created_at: new Date().toISOString() });
@@ -49,7 +51,7 @@ export async function boot() {
   const html = fs.readFileSync(path.join(PUB, "index.html"), "utf8").replace(/<script type="module"[^>]*><\/script>/, "");
   const dom = new JSDOM(html, { url: "https://staysi.test/", pretendToBeVisual: true });
   const w = dom.window;
-  Object.assign(globalThis, { window: w, document: w.document, localStorage: w.localStorage, location: w.location, history: w.history, Image: w.Image, __sb: sbStub, fetch: fakeApi });
+  Object.assign(globalThis, { window: w, document: w.document, localStorage: w.localStorage, location: w.location, history: w.history, Image: w.Image, Audio: w.Audio, Blob: w.Blob, __sb: sbStub, fetch: fakeApi });
   const V = (name, lang) => ({ name, lang, voiceURI: name, localService: true });
   const voices = [V("Anna (Enhanced)", "de-DE"), V("Helena", "de-DE"), V("Yannick (Enhanced)", "de-DE"), V("Samantha", "en-US"), V("Daniel", "en-GB")];
   w.speechSynthesis = { getVoices: () => voices, speak(u) { spoken.push({ text: u.text, voice: u.voice?.name }); if (u.onend) setTimeout(u.onend, 0); }, cancel() {}, addEventListener() {} }; globalThis.speechSynthesis = w.speechSynthesis;

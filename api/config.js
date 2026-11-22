@@ -5,6 +5,7 @@ export default function handler(req, res) {
   res.setHeader("cache-control", "public, max-age=300");
   res.send(JSON.stringify({
     supabaseUrl: process.env.SUPABASE_URL || "",
-    supabaseAnonKey: process.env.SUPABASE_ANON_KEY || ""
+    supabaseAnonKey: process.env.SUPABASE_ANON_KEY || "",
+    cloudVoice: !!process.env.GOOGLE_TTS_KEY
   }));
 }

@@ -40,13 +40,14 @@ Phone (PWA) ──► Vercel function /api/ai ──► Claude API
 
 ## Tech stack
 
-Vanilla JavaScript (ES modules, no build step) · Vercel serverless functions (Node 20) · Supabase (Auth + Postgres + RLS) · Claude API with prompt caching · Web Speech API for text-to-speech and dictation · GitHub Actions + Vercel Deployment Checks (CI/CD) · node:test + jsdom
+Vanilla JavaScript (ES modules, no build step) · Vercel serverless functions (Node 20) · Supabase (Auth + Postgres + RLS) · Claude API with prompt caching · Google Cloud Text-to-Speech (Chirp 3 HD voices, cached on device) with Web Speech API as fallback, plus dictation · GitHub Actions + Vercel Deployment Checks (CI/CD) · node:test + jsdom
 
 ## Project structure
 
 ```
 api/ai.js            all Claude actions: lesson, review, check, feedback, placement, plan, photo, word cards
 api/config.js        public client config
+api/tts.js           cloud text-to-speech proxy (Google Chirp 3 HD), monthly free-tier guard
 lib/server.js        auth check, Claude call with JSON retry, cost logging, limits
 public/app.js        screens, lessons, onboarding, placement, back navigation
 public/words.js      language screen and spaced-repetition word bank

@@ -35,7 +35,7 @@ const TIMES = [
   { m: 45, l: "Pełny trening", bg: "#FF8E6E", fg: "#4A1405", n: 12 }
 ];
 const INTERVAL = [1, 1, 3, 7, 14, 30]; // dni do następnej powtórki według siły zwrotu
-const PURPOSE = { lesson: "Lekcja", review: "Karty powtórki", check: "Sprawdzenie odpowiedzi", feedback: "Poprawki", placement: "Test poziomu", plan: "Plan nauki", vocative: "Forma imienia", photo: "Zdjęcie strony", enrich: "Karty słówek", lesson_edit: "Redakcja tłumaczenia" };
+const PURPOSE = { lesson: "Lekcja", review: "Karty powtórki", check: "Sprawdzenie odpowiedzi", feedback: "Poprawki", placement: "Test poziomu", plan: "Plan nauki", vocative: "Forma imienia", photo: "Zdjęcie strony", enrich: "Karty słówek", lesson_edit: "Redakcja tłumaczenia", tts: "Lektor" };
 
 /* ================= Ikony ================= */
 const I = {
@@ -67,7 +67,7 @@ let sb = null;
 const S = {
   session: null, profile: null, langs: {}, bank: [], usage: [], doneDays: {}, view: "loading",
   auth: { mode: "login", msg: "" }, ob: { step: 0, sel: [], self: {}, idx: 0 }, pl: null,
-  sheet: null, L: null, busy: null, add: null, voice: loadLocal("staysiVoices", {}), voiceF: loadLocal("staysiVoiceF", {}), voiceM: loadLocal("staysiVoiceM", {}), rate: loadLocal("staysiRate", 0.95)
+  sheet: null, L: null, busy: null, add: null, voice: loadLocal("staysiVoices", {}), voiceF: loadLocal("staysiVoiceF", {}), voiceM: loadLocal("staysiVoiceM", {}), cloud: false, cloudOff: loadLocal("staysiCloudOff", false), cloudVoice: loadLocal("staysiCloudVoice", { f: "Aoede", m: "Charon" }), rate: loadLocal("staysiRate", 0.95)
 };
 
 /* ================= Pomocnicze ================= */
@@ -135,11 +135,72 @@ function voiceForSpeaker(lang, lines, i) {
   const order = [...new Set(lines.filter(l => l.gender === g).map(l => l.speaker))];
   return pool[Math.max(0, order.indexOf(ln.speaker)) % pool.length];
 }
+// Kto mówi: płeć i numer postaci tej płci (druga kobieta = drugi głos kobiecy)
+function speakerWho(lines, i) {
+  const ln = lines[i], g = ln?.gender === "m" ? "m" : ln?.gender === "f" ? "f" : null;
+  if (!g) return null;
+  const order = [...new Set(lines.filter(l => l.gender === g).map(l => l.speaker))];
+  return { g, slot: Math.max(0, order.indexOf(ln.speaker)) };
+}
+const pickFor = (lang, lines, i) => ({ device: voiceForSpeaker(lang, lines, i), who: speakerWho(lines, i) });
 function speakLines(lines, lang, onEach, onDone) {
-  let i = 0; const next = () => { if (i >= lines.length) return onDone && onDone(); onEach && onEach(i); const j = i++; speak(lines[j].text, lang, next, voiceForSpeaker(lang, lines, j)); };
+  let i = 0; const next = () => { if (i >= lines.length) return onDone && onDone(); onEach && onEach(i); const j = i++; speak(lines[j].text, lang, next, pickFor(lang, lines, j)); };
   next();
 }
-function speak(text, lang, onend, voice) {
+/* --- Lektor z chmury (Google Chirp 3 HD) --- */
+const CLOUD_VOICES = { f: ["Aoede", "Kore", "Leda", "Zephyr"], m: ["Charon", "Puck", "Orus", "Fenrir"] };
+const CLOUD_LANGS = ["de", "en", "es", "fr", "it", "pl"];
+const AUD = typeof Audio !== "undefined" ? new Audio() : null;
+let speakGen = 0, cloudWarned = false;
+const useCloud = lang => S.cloud && !S.cloudOff && CLOUD_LANGS.includes(lang) && AUD;
+function cloudName(g, slot = 0) {
+  const list = CLOUD_VOICES[g], first = list.includes(S.cloudVoice[g]) ? S.cloudVoice[g] : list[0];
+  const rest = list.filter(v => v !== first);
+  return slot ? rest[(slot - 1) % rest.length] : first;
+}
+async function sha(t) {
+  try { const b = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(t)); return [...new Uint8Array(b)].map(x => x.toString(16).padStart(2, "0")).join(""); }
+  catch { let h = 0; for (const c of t) h = (h * 31 + c.charCodeAt(0)) | 0; return String(h >>> 0) + t.length; }
+}
+// Nagranie: najpierw z pamięci telefonu (to samo zdanie nie kosztuje drugi raz), inaczej z serwera
+async function cloudAudio(text, lang, g, voice) {
+  const key = new URL(`/__tts/${await sha([lang, g, voice, text].join("|"))}.mp3`, location.href).href;
+  let cache = null; try { cache = await caches.open("staysi-tts"); const hit = await cache.match(key); if (hit) return await hit.blob(); } catch {}
+  const { data } = await sb.auth.getSession();
+  const r = await fetch("/api/tts", { method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${data.session?.access_token}` }, body: JSON.stringify({ text, lang, gender: g, voice }) });
+  if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.error || "Lektor z chmury nie odpowiedział."); }
+  const blob = await r.blob();
+  try { cache && await cache.put(key, new Response(blob, { headers: { "content-type": "audio/mpeg" } })); } catch {}
+  return blob;
+}
+async function cloudSpeak(text, lang, who, gen) {
+  const g = who?.g || "f", voice = cloudName(g, who?.slot || 0);
+  const blob = await cloudAudio(text, lang, g, voice);
+  if (gen !== speakGen) return "cancelled";
+  return new Promise((res, rej) => {
+    const url = URL.createObjectURL(blob);
+    AUD.onended = () => { URL.revokeObjectURL(url); res("ok"); };
+    AUD.onerror = () => { URL.revokeObjectURL(url); rej(new Error("Nie udało się odtworzyć nagrania.")); };
+    AUD.src = url; AUD.playbackRate = S.rate || 0.95;
+    const p = AUD.play(); if (p && p.catch) p.catch(rej);
+  });
+}
+// iPhone pozwala grać dźwięk tylko po stuknięciu: przy pierwszym stuknięciu "odblokowujemy" odtwarzacz cichym dźwiękiem
+function silentWav() {
+  const n = 800, b = new ArrayBuffer(44 + n), v = new DataView(b), w = (o, t) => [...t].forEach((c, i) => v.setUint8(o + i, c.charCodeAt(0)));
+  w(0, "RIFF"); v.setUint32(4, 36 + n, true); w(8, "WAVE"); w(12, "fmt "); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+  v.setUint32(24, 8000, true); v.setUint32(28, 8000, true); v.setUint16(32, 1, true); v.setUint16(34, 8, true); w(36, "data"); v.setUint32(40, n, true);
+  for (let i = 0; i < n; i++) v.setUint8(44 + i, 128);
+  return URL.createObjectURL(new Blob([b], { type: "audio/wav" }));
+}
+let audioUnlocked = false;
+function unlockAudio() {
+  if (audioUnlocked || !AUD) return; audioUnlocked = true;
+  try { AUD.src = silentWav(); const p = AUD.play(); if (p && p.catch) p.catch(() => { audioUnlocked = false; }); } catch { audioUnlocked = false; }
+}
+if (typeof document !== "undefined") ["touchend", "click"].forEach(ev => document.addEventListener(ev, unlockAudio, { capture: true, passive: true }));
+
+function deviceSpeak(text, lang, onend, voice) {
   try {
     if (!("speechSynthesis" in window)) { toast("Ta przeglądarka nie ma lektora."); onend && onend(); return; }
     if (!VOICES.length) loadVoices();
@@ -150,7 +211,19 @@ function speak(text, lang, onend, voice) {
     speechSynthesis.speak(u);
   } catch { onend && onend(); }
 }
-const stopSpeech = () => { try { speechSynthesis.cancel(); } catch {} };
+// pick: głos z telefonu (SpeechSynthesisVoice) albo { device, who } dla postaci z dialogu
+function speak(text, lang, onend, pick) {
+  stopSpeech(); const gen = speakGen;
+  const device = pick && pick.who !== undefined ? pick.device : pick, who = pick && pick.who !== undefined ? pick.who : null;
+  if (!useCloud(lang)) return deviceSpeak(text, lang, onend, device);
+  cloudSpeak(text, lang, who, gen).then(r => { if (r === "ok" && gen === speakGen) onend && onend(); })
+    .catch(e => {
+      if (gen !== speakGen) return;
+      if (!cloudWarned) { cloudWarned = true; toast(`${e.message} Czyta głos z telefonu.`); }
+      deviceSpeak(text, lang, onend, device);
+    });
+}
+const stopSpeech = () => { speakGen++; try { AUD && AUD.pause(); } catch {} try { speechSynthesis.cancel(); } catch {} };
 
 /* ================= Dyktowanie ================= */
 let rec = null;
@@ -419,7 +492,7 @@ function renderCost() {
   const today = all.filter(c => new Date(c.created_at).toLocaleDateString("sv-SE") === day(0)).reduce((a, c) => a + Number(c.cost_usd), 0);
   const lessons = all.filter(c => c.purpose === "lesson").length;
   const avg = lessons ? total / lessons : 0;
-  const models = {}; all.forEach(c => { const m = c.model.includes("opus") ? "Claude Opus 5.5" : c.model.includes("sonnet") ? "Claude Sonnet 5.5" : "Claude Haiku 5.5"; models[m] = models[m] || { n: 0, v: 0, t: 0 }; models[m].n++; models[m].v += Number(c.cost_usd); models[m].t += c.input_tokens + c.output_tokens; });
+  const models = {}; all.forEach(c => { if (c.purpose === "tts") return; const m = c.model.includes("opus") ? "Claude Opus 5.5" : c.model.includes("sonnet") ? "Claude Sonnet 5.5" : "Claude Haiku 5.5"; models[m] = models[m] || { n: 0, v: 0, t: 0 }; models[m].n++; models[m].v += Number(c.cost_usd); models[m].t += c.input_tokens + c.output_tokens; });
   const langs = Object.keys(S.langs).map(k => ({ k, v: all.filter(c => c.lang === k).reduce((a, c) => a + Number(c.cost_usd), 0), n: all.filter(c => c.lang === k && c.purpose === "lesson").length }));
   const maxL = Math.max(0.000001, ...langs.map(l => l.v));
   const month = new Date().toLocaleDateString("pl-PL", { month: "long" });
@@ -428,10 +501,10 @@ function renderCost() {
   <div style="position:relative;display:flex;flex-direction:column;gap:10px"><span class="big-num">${usd(total)}</span>
     <div class="bar" style="background:var(--ink-3)" aria-hidden="true"><i style="width:${share}%;background:${share >= 80 ? "var(--red)" : "var(--mint)"}"></i></div>
     <span class="small soft-2">${Math.round(share)}% z limitu ${usd(budget)}${share >= 80 ? " · zbliżasz się do limitu" : ""}</span></div>
-  <div class="chips"><span class="chip" style="background:#fff;color:var(--ink);border-color:#fff">Dziś ${usd(today)}</span><span class="chip" style="background:var(--sky);color:#10265E;border-color:var(--sky)">Lekcja śr. ${lessons ? usd(avg) : "–"}</span><span class="chip" style="background:var(--mint);color:#0B3D25;border-color:var(--mint)">Lektor $0.00</span></div>
+  <div class="chips"><span class="chip" style="background:#fff;color:var(--ink);border-color:#fff">Dziś ${usd(today)}</span><span class="chip" style="background:var(--sky);color:#10265E;border-color:var(--sky)">Lekcja śr. ${lessons ? usd(avg) : "–"}</span><span class="chip" style="background:var(--mint);color:#0B3D25;border-color:var(--mint)">Lektor ${Math.round(all.filter(c => c.purpose === "tts").reduce((a, c) => a + (c.input_tokens || 0), 0) / 1000)} tys. znaków z 1 mln gratis</span></div>
   <div class="card"><h3>Według modelu</h3>${Object.keys(models).length ? Object.entries(models).map(([m, x]) => `<div class="row"><span><b>${m}</b><br><span class="small soft-2">${x.n} zapytań · ${(x.t / 1000).toFixed(1)}k tokenów</span></span><b class="tabnum">${usd(x.v)}</b></div>`).join('<div class="divider"></div>') : '<p class="soft-2">Jeszcze nic.</p>'}</div>
   <div class="card"><h3>Według języka</h3>${langs.map(l => `<div class="row small"><span>${LANGS[l.k].name} · ${l.n} lekcji</span><b class="tabnum">${usd(l.v)}</b></div><div class="bar" style="background:var(--ink-3);height:8px"><i style="width:${l.v / maxL * 100}%;background:var(--sun)"></i></div>`).join("")}</div>
-  <div class="card"><h3>Historia</h3>${all.slice(0, 15).map(c => `<div class="row small"><span>${esc(PURPOSE[c.purpose] || c.purpose)}${c.lang ? " · " + esc(LANGS[c.lang]?.name || c.lang) : ""}<br><span class="soft-2">${new Date(c.created_at).toLocaleString("pl-PL", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</span></span><b class="tabnum">${usd(Number(c.cost_usd))}</b></div>`).join("") || '<p class="soft-2">Jeszcze nic.</p>'}</div>
+  <div class="card"><h3>Historia</h3>${all.filter(c => c.purpose !== "tts").slice(0, 15).map(c => `<div class="row small"><span>${esc(PURPOSE[c.purpose] || c.purpose)}${c.lang ? " · " + esc(LANGS[c.lang]?.name || c.lang) : ""}<br><span class="soft-2">${new Date(c.created_at).toLocaleString("pl-PL", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</span></span><b class="tabnum">${usd(Number(c.cost_usd))}</b></div>`).join("") || '<p class="soft-2">Jeszcze nic.</p>'}</div>
   <div class="card"><label class="f">Miesięczny limit (USD)<input class="field" type="text" inputmode="decimal" id="budget" value="${esc(budget)}"></label>
     <button class="btn btn-sun" data-act="saveBudget" style="font-size:16px;padding:12px">Zapisz limit</button>
     <p class="small soft-2">Po przekroczeniu limitu serwer wstrzymuje zapytania do Claude do końca miesiąca albo do zmiany limitu.</p></div>`;
@@ -454,7 +527,12 @@ function renderMe() {
   </div>
   <div class="card"><h3>Języki i poziomy</h3>${Object.values(S.langs).map(l => `<div class="row"><span>${LANGS[l.lang].name} · <b>${band(l.score)[0]}</b> <span class="small muted">(${l.score} pkt)</span></span><button class="chip" data-act="retest" data-k="${l.lang}">Powtórz test</button></div>`).join('<div class="divider"></div>')}
     <button class="chip" data-act="addLang" style="align-self:flex-start">+ Dodaj język</button></div>
-  <div class="card"><h3>Lektor</h3><p class="small muted">W dialogach kobiety czyta głos kobiecy, a mężczyzn męski. Aplikacja rozpoznaje płeć popularnych głosów po imieniu; jeśli się pomyli, zmień tutaj.</p>${Object.keys(S.langs).map(k => { const list = voicesFor(k), best = list.length ? quality(list[0]) : 0;
+  <div class="card"><h3>Lektor</h3>
+    ${S.cloud ? `<div class="row"><span><b>Lektor z chmury (Google)</b><br><span class="small muted">Naturalne głosy we wszystkich językach</span></span><button class="toggle ${S.cloudOff ? "" : "on"}" data-act="cloudToggle" aria-pressed="${!S.cloudOff}" aria-label="Lektor z chmury"></button></div>
+    ${S.cloudOff ? "" : `<label class="f">Głos kobiecy<select class="field" data-cloud="f">${CLOUD_VOICES.f.map(v => `<option ${cloudName("f") === v ? "selected" : ""}>${v}</option>`).join("")}</select></label>
+    <label class="f">Głos męski<select class="field" data-cloud="m">${CLOUD_VOICES.m.map(v => `<option ${cloudName("m") === v ? "selected" : ""}>${v}</option>`).join("")}</select></label>
+    <p class="small muted">Ten sam głos mówi we wszystkich językach. Druga osoba tej samej płci w dialogu dostaje inny głos z listy. Gdy chmura nie działa, czyta głos z telefonu.</p>`}<div class="divider"></div><p class="small" style="font-weight:800">Głos z telefonu (zapasowy)</p>` : ""}
+    <p class="small muted">W dialogach kobiety czyta głos kobiecy, a mężczyzn męski. Aplikacja rozpoznaje płeć popularnych głosów po imieniu; jeśli się pomyli, zmień tutaj.</p>${Object.keys(S.langs).map(k => { const list = voicesFor(k), best = list.length ? quality(list[0]) : 0;
       const opts = (cur) => list.length ? list.map(v => `<option value="${esc(v.voiceURI)}" ${cur && cur.voiceURI === v.voiceURI ? "selected" : ""}>${esc(v.name)} · ${["", "Podstawowy", "Enhanced", "Premium"][quality(v)]}${genderOf(v) ? (genderOf(v) === "f" ? " · ♀" : " · ♂") : ""}</option>`).join("") : "<option>Brak głosów</option>";
       return `<p class="small" style="font-weight:800;margin-top:6px">${LANGS[k].name}</p>
       <label class="f">Głos kobiecy<select class="field" data-voice="${k}" data-g="f">${opts(genderVoices(k, "f")[0] || list[0])}</select></label>
@@ -652,6 +730,10 @@ function afterRender() {
   const f = $("#authForm"); if (f) f.addEventListener("submit", onAuth);
   const ans = $("#ans"); if (ans) { ans.focus({ preventScroll: true }); ans.addEventListener("keydown", e => { if (e.key === "Enter") act("check"); }); }
   const nm = $("#name"); if (nm) nm.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); act("obNext"); } });
+  document.querySelectorAll("select[data-cloud]").forEach(sel => sel.addEventListener("change", () => {
+    S.cloudVoice[sel.dataset.cloud] = sel.value; saveLocal("staysiCloudVoice", S.cloudVoice);
+    const k = Object.keys(S.langs)[0] || "en"; speak(LANGS[k].hi, k, null, { device: null, who: { g: sel.dataset.cloud, slot: 0 } });
+  }));
   document.querySelectorAll("select[data-voice]").forEach(sel => sel.addEventListener("change", () => {
     const k = sel.dataset.voice, g = sel.dataset.g, store = g === "m" ? "voiceM" : "voiceF";
     if (!sel.value) return;
@@ -798,6 +880,7 @@ async function act(a, k, el) {
       if (notes !== (P.style_notes || "")) await saveNotes(notes);
       toast("Zapisano."); return render();
     }
+    case "cloudToggle": S.cloudOff = !S.cloudOff; saveLocal("staysiCloudOff", S.cloudOff); return render();
     case "remind": await saveProfile({ remind: !P.remind }); return render();
     case "logout": await sb.auth.signOut(); return;
 
@@ -820,9 +903,9 @@ async function act(a, k, el) {
       L.tip = c; if (!L.added.includes(c.text)) { L.added.push(c.text); await addToBank(L.lang, c.text, c.meaning, line.text); }
       speak(c.text, L.lang); return render();
     }
-    case "sayLine": { const i = +k; setHl(i); return speak(L.C.lines[i].text, L.lang, () => setHl(-1), voiceForSpeaker(L.lang, L.C.lines, i)); }
+    case "sayLine": { const i = +k; setHl(i); return speak(L.C.lines[i].text, L.lang, () => setHl(-1), pickFor(L.lang, L.C.lines, i)); }
     case "trToggle": L.showTr[+k] = !L.showTr[+k]; return render();
-    case "playAll": { let i = 0; const next = () => { if (i >= L.C.lines.length || S.view !== "lesson" || S.L !== L) { setHl(-1); return; } setHl(i); speak(L.C.lines[i].text, L.lang, () => { i++; next(); }, voiceForSpeaker(L.lang, L.C.lines, i)); }; return next(); }
+    case "playAll": { let i = 0; const next = () => { if (i >= L.C.lines.length || S.view !== "lesson" || S.L !== L) { setHl(-1); return; } setHl(i); speak(L.C.lines[i].text, L.lang, () => { i++; next(); }, pickFor(L.lang, L.C.lines, i)); }; return next(); }
     case "matNext": stopSpeech(); L.hl = -1; L.tip = null; L.step++;
       if (L.step === matSteps(L).gram && !L.gramSaved) { L.gramSaved = true; Learn.saveFromLesson(L); }
       render(); return scrollTop();
@@ -1033,6 +1116,7 @@ async function boot() {
   let cfg;
   try { cfg = await (await fetch("/api/config")).json(); } catch { cfg = {}; }
   if (!cfg.supabaseUrl || !cfg.supabaseAnonKey) { S.view = "setup"; return render(); }
+  S.cloud = !!cfg.cloudVoice;
   sb = createClient(cfg.supabaseUrl, cfg.supabaseAnonKey);
   const { data } = await sb.auth.getSession();
   await onSession(data.session);
