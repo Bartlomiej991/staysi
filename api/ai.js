@@ -46,7 +46,7 @@ export async function naturalize(db, { userId, lang, L, native, content }) {
   const contrasts = (content.contrasts || []).map((c, i) => ({ i, original: c.target, translation: c.pl }));
   if (!lines.length) return;
   try {
-    const out = await claudeJson(db, { userId, model: LESSON_MODEL, purpose: "lesson", lang, maxTokens: 400 + lines.length * 120,
+    const out = await claudeJson(db, { userId, model: LESSON_MODEL, purpose: "lesson_edit", lang, maxTokens: 400 + lines.length * 120,
       system: `You are a native ${native} editor of subtitles for a TV series. You make dialogue sound exactly like real people talk in ${native}. Always answer with a single JSON object and nothing else.`,
       messages: [{ role: "user", content: `Below is a ${L} conversation with draft ${native} translations. The drafts copy ${L} sentence structure, so they sound translated.
 Rewrite every translation so it is what a ${native} speaker would actually say in this situation, out loud, to a friend: colloquial, short, natural word order and natural ${native} expressions. Keep the meaning and the tone; you may change words and structure freely (e.g. Polish: "A ilu będzie ludzi?" -> "A kto będzie?" or "A ile osób przyjdzie?"; "To wezmę dodatkowo mnóstwo chipsów" -> "No to biorę więcej chipsów"). Keep names. If a draft already sounds natural, keep it.

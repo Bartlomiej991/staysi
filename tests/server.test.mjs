@@ -40,3 +40,18 @@ test("redaktor tłumaczeń podmienia kalki na naturalny polski, a przy błędzie
   await naturalize(db, { userId: "u", lang: "de", L: "German", native: "Polish", content });
   assert.equal(content.lines[0].translation, "Jasne, a kto będzie?", "przy błędzie lekcja nie przepada");
 });
+
+test("dzienny limit liczy lekcje, a nie zapytania do Claude'a", async () => {
+  const { checkLimits, warsawMidnight } = await import("../lib/server.js");
+  assert.equal(warsawMidnight(new Date("2026-11-22T18:00:00Z")).toISOString(), "2026-11-21T23:00:00.000Z", "zimą północ w Polsce to 23:00 UTC");
+  assert.equal(warsawMidnight(new Date("2026-07-10T12:00:00Z")).toISOString(), "2026-07-09T22:00:00.000Z", "latem 22:00 UTC");
+  const now = new Date().toISOString();
+  const usage = Array.from({ length: 20 }, () => ({ cost_usd: 0.01, purpose: "lesson", created_at: now }));
+  const fake = lessonsCount => ({ from: t => {
+    const q = { select: () => q, eq: () => q, gte: () => q, single: async () => ({ data: { budget_usd: 5 } }),
+      then: (res) => res(t === "usage" ? { data: usage, error: null } : { count: lessonsCount, error: null }) };
+    return q;
+  } });
+  await assert.doesNotReject(checkLimits(fake(3), "u", "lesson"), "20 zapytań, ale 3 lekcje: można dalej");
+  await assert.rejects(checkLimits(fake(12), "u", "lesson"), /Dzienny limit to 12 lekcji/);
+});

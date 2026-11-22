@@ -35,7 +35,7 @@ const TIMES = [
   { m: 45, l: "Pełny trening", bg: "#FF8E6E", fg: "#4A1405", n: 12 }
 ];
 const INTERVAL = [1, 1, 3, 7, 14, 30]; // dni do następnej powtórki według siły zwrotu
-const PURPOSE = { lesson: "Lekcja", review: "Karty powtórki", check: "Sprawdzenie odpowiedzi", feedback: "Poprawki", placement: "Test poziomu", plan: "Plan nauki", vocative: "Forma imienia", photo: "Zdjęcie strony", enrich: "Karty słówek" };
+const PURPOSE = { lesson: "Lekcja", review: "Karty powtórki", check: "Sprawdzenie odpowiedzi", feedback: "Poprawki", placement: "Test poziomu", plan: "Plan nauki", vocative: "Forma imienia", photo: "Zdjęcie strony", enrich: "Karty słówek", lesson_edit: "Redakcja tłumaczenia" };
 
 /* ================= Ikony ================= */
 const I = {
@@ -154,16 +154,28 @@ const stopSpeech = () => { try { speechSynthesis.cancel(); } catch {} };
 
 /* ================= Dyktowanie ================= */
 let rec = null;
+// Dyktowanie. Na iPhonie rozpoznawanie mowy w przeglądarce potrafi zawisnąć, więc tam od razu
+// używamy mikrofonu z klawiatury (działa zawsze). Gdzie indziej: limit czasu i twarde zatrzymanie.
+const IOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+let recTimer = null;
+function stopDictation(btn) {
+  clearTimeout(recTimer); recTimer = null;
+  const r = rec; rec = null;
+  if (r) { r.onresult = r.onerror = r.onend = null; try { r.abort(); } catch {} }
+  (btn || document.querySelector(".mic.on"))?.classList.remove("on");
+}
 function dictate(targetId, lang, btn) {
   const R = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!R) { toast("Użyj mikrofonu na klawiaturze telefonu, żeby podyktować odpowiedź."); $("#" + targetId)?.focus(); return; }
-  if (rec) { rec.stop(); return; }
+  const field = $("#" + targetId);
+  if (rec) return stopDictation(btn);
+  if (!R || IOS) { toast("Stuknij w pole i użyj mikrofonu 🎤 na klawiaturze telefonu."); field?.focus(); return; }
   rec = new R(); rec.lang = LANGS[lang]?.code || lang; rec.interimResults = false; rec.continuous = false;
-  const el = $("#" + targetId); btn.classList.add("on");
-  rec.onresult = e => { const t = Array.from(e.results).map(r => r[0].transcript).join(" "); el.value = (el.value ? el.value + " " : "") + t; };
-  rec.onerror = () => toast("Nie udało się rozpoznać mowy. Spróbuj jeszcze raz.");
-  rec.onend = () => { btn.classList.remove("on"); rec = null; };
-  rec.start();
+  btn.classList.add("on");
+  rec.onresult = e => { const t = Array.from(e.results).map(r => r[0].transcript).join(" "); if (field) field.value = (field.value ? field.value + " " : "") + t; };
+  rec.onerror = () => { toast("Nie udało się rozpoznać mowy. Użyj mikrofonu na klawiaturze."); stopDictation(btn); };
+  rec.onend = () => stopDictation(btn);
+  recTimer = setTimeout(() => { if (rec) { toast("Dyktowanie nie odpowiada. Użyj mikrofonu na klawiaturze."); stopDictation(btn); field?.focus(); } }, 15000);
+  try { rec.start(); } catch { stopDictation(btn); toast("Użyj mikrofonu na klawiaturze telefonu."); field?.focus(); }
 }
 
 /* ================= Dane z bazy ================= */
@@ -234,6 +246,7 @@ function render() {
   if (S.sheet) html += renderSheet();
   if (S.add) html += renderAdd();
   if (S.busy) html += `<div class="busy" role="status" aria-live="polite"><div class="spinner"></div><h2>${esc(S.busy)}</h2></div>`;
+  if (rec) stopDictation();
   app.innerHTML = html;
   afterRender();
   syncHistory();
@@ -430,8 +443,8 @@ function renderMe() {
       const opts = (cur) => list.length ? list.map(v => `<option value="${esc(v.voiceURI)}" ${cur && cur.voiceURI === v.voiceURI ? "selected" : ""}>${esc(v.name)} · ${["", "Podstawowy", "Enhanced", "Premium"][quality(v)]}${genderOf(v) ? (genderOf(v) === "f" ? " · ♀" : " · ♂") : ""}</option>`).join("") : "<option>Brak głosów</option>";
       return `<p class="small" style="font-weight:800;margin-top:6px">${LANGS[k].name}</p>
       <label class="f">Głos kobiecy<select class="field" data-voice="${k}" data-g="f">${opts(genderVoices(k, "f")[0] || list[0])}</select></label>
-      <label class="f">Głos męski<select class="field" data-voice="${k}" data-g="m">${opts(genderVoices(k, "m")[0] || list[0])}</select></label>
-      ${best < 2 ? `<p class="small" style="color:var(--red)">Brak naturalnego głosu. iPhone: Settings → Accessibility → Read &amp; Speak → Voices → wybierz język → stuknij imię → pobierz wersję Enhanced lub Premium (za darmo). Android: Ustawienia → Zamiana tekstu na mowę.</p>` : ""}`; }).join("")}
+      <label class="f">Głos męski<select class="field" data-voice="${k}" data-g="m">${genderVoices(k, "m").length ? "" : `<option value="">Brak głosu męskiego, czyta głos kobiecy</option>`}${opts(genderVoices(k, "m")[0])}</select></label>
+      ${best < 2 ? (IOS ? `<p class="small muted">iPhone udostępnia aplikacjom w przeglądarce tylko podstawowe głosy; pobrane wersje Enhanced i Premium tu się nie pojawią. Naturalny głos: zaznacz tekst i wybierz <b>Speak</b> (Settings → Accessibility → Read &amp; Speak → Speak Selection).</p>` : `<p class="small" style="color:var(--red)">Brak naturalnego głosu. Android: Ustawienia → Zamiana tekstu na mowę → pobierz lepszy głos.</p>`) : ""}`; }).join("")}
     <label class="f">Tempo: <span id="rateVal">${Math.round(S.rate * 100)}%</span><input type="range" id="rate" min="0.7" max="1.1" step="0.05" value="${S.rate}"></label></div>
   <div class="card"><h3>Przypomnienia</h3>
     <div class="row"><span>Codzienne przypomnienie</span><button class="toggle ${P.remind ? "on" : ""}" data-act="remind" aria-label="Przypomnienia" aria-pressed="${P.remind}"></button></div>
@@ -607,6 +620,7 @@ function afterRender() {
   const nm = $("#name"); if (nm) nm.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); act("obNext"); } });
   document.querySelectorAll("select[data-voice]").forEach(sel => sel.addEventListener("change", () => {
     const k = sel.dataset.voice, g = sel.dataset.g, store = g === "m" ? "voiceM" : "voiceF";
+    if (!sel.value) return;
     S[store][k] = sel.value; saveLocal(g === "m" ? "staysiVoiceM" : "staysiVoiceF", S[store]);
     if (g === "f") { S.voice[k] = sel.value; saveLocal("staysiVoices", S.voice); }
     speak(LANGS[k].hi, k, null, voicesFor(k).find(v => v.voiceURI === sel.value));

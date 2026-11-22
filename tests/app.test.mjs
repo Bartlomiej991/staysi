@@ -41,6 +41,11 @@ test("test poziomu: cofanie, zero i krótki test", async () => {
   await click('[data-act="plBack"]'); await click('[data-act="plNext"]', 40);
   assert.equal(apiCalls.filter(a => a === "placement_questions").length, 1, "po cofnięciu pytania nie są pobierane drugi raz");
   await click('[data-act="plAns"][data-k="0"]'); await click('[data-act="plNext"]');
+  // dyktowanie, które nigdy nie odpowiada (jak na iPhonie), nie może zablokować ekranu
+  window.webkitSpeechRecognition = class { start() {} abort() {} stop() {} };
+  await click('[data-act="mic"]'); assert.ok($(".mic.on"), "mikrofon słucha");
+  await click('[data-act="mic"]'); assert.ok(!$(".mic.on"), "drugie stuknięcie zawsze zatrzymuje dyktowanie");
+  delete window.webkitSpeechRecognition;
   await type("#plWrite", "I like coding"); await click('[data-act="plNext"]', 50);
   assert.match(text(), /B1/);
   await click('[data-act="plDone"]', 80);
