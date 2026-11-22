@@ -207,8 +207,8 @@ a{color:var(--indigo)}
 
 /* ---------- Cofanie, gramatyka, przewodnik ---------- */
 .twobtn{display:flex;gap:10px;align-items:stretch}
-.twobtn .btn{flex:1}
-.twobtn .btn-ghost{flex:0 0 auto;padding-left:18px;padding-right:18px}
+.twobtn .btn{flex:1 1 0;width:auto;min-width:0}
+.twobtn .btn-ghost{flex:0 0 auto;width:auto;padding-left:18px;padding-right:18px}
 .backbtn{background:#fff;color:var(--ink);align-self:flex-start;border:2px solid var(--line)}
 .tip .how{display:block;margin-top:6px;font-weight:600}
 .gcard{background:#fff;color:var(--ink);border-radius:22px;padding:16px;display:flex;flex-direction:column;gap:10px;box-shadow:0 5px 0 rgba(0,0,0,.12)}
@@ -233,3 +233,4 @@ a{color:var(--indigo)}
 .src.sel span{opacity:.8}
 .sheet{max-height:92vh;overflow-y:auto}
 .tmap{border-top:2px dashed rgba(0,0,0,.15);padding-top:10px;display:flex;flex-direction:column;gap:4px}
+.b .lit{display:block;margin-top:6px;font-size:13px;font-style:italic;opacity:.65}

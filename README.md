@@ -59,7 +59,7 @@ docs/                product plan and setup guide
 
 ## Testing and CI/CD
 
-`npm test` runs 26 tests with Node's built-in test runner. The main one drives the whole app in jsdom the way a user would (onboarding, placement test, a full lesson, the word bank, grammar notes, back navigation) against an in-memory fake of Supabase and the API, so it needs no keys and costs nothing. Other tests cover the level rules (calibration, then promotion only from the median of the last five lessons across at least two topics), the JSON-retry logic for Claude responses, syntax of every source file and a scan for leaked keys.
+`npm test` runs 30 tests with Node's built-in test runner. The main one drives the whole app in jsdom the way a user would (onboarding, placement test, a full lesson, the word bank, grammar notes, back navigation) against an in-memory fake of Supabase and the API, so it needs no keys and costs nothing. A visual test opens the app in headless Chrome at iPhone size (390 × 844), walks through 34 screens, fails if any button or field sticks out of the screen and saves screenshots (uploaded as a CI artifact). Other tests cover the level rules (calibration, then promotion only from the median of the last five lessons across at least two topics), the JSON-retry logic for Claude responses, syntax of every source file and a scan for leaked keys.
 
 On every push GitHub Actions runs the suite. Vercel builds each commit, but a Deployment Check holds the release until the `tests` job passes, so a broken build never reaches production.
 

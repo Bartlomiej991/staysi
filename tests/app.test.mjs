@@ -69,6 +69,7 @@ test("pierwsza lekcja: bez powtórki, gramatyka, barometr, mówienie", async () 
   await click('[data-act="time"][data-k="15"]', 80);
   assert.equal(bodies.filter(b => b.action === "lesson").at(-1).topic, "rozmowa o pracę", "temat trafia do Claude'a");
   assert.match(text(), /KROK 1 · TŁUMACZENIE/, "pierwsza lekcja zaczyna się od nowego materiału");
+  assert.match(text(), /dosłownie: Ja chciałbym chętnie jedną kawę\./, "na poziomie A widać tłumaczenie dosłowne");
   await click('[data-act="matNext"]');
   await click('[data-act="chunk"]', 40);
   assert.match(text(), /möchtest = forma od mögen/, "stuknięty zwrot pokazuje, jak jest zbudowany");
@@ -88,6 +89,10 @@ test("pierwsza lekcja: bez powtórki, gramatyka, barometr, mówienie", async () 
   assert.match(text(), /Am Wochenende möchte ich gern spielen/);
   await click('[data-act="finish"]', 80);
   assert.match(text(), /Brawo/);
+  await type("#nextNote", "kwestie się nie łączyły");
+  await click('[data-act="saveNote"]');
+  assert.match(db.profiles[0].style_notes, /• kwestie się nie łączyły/, "uwaga po lekcji trafia do uwag dla Claude'a");
+  assert.match(text(), /Zapisane\. Claude weźmie to pod uwagę/);
   await click('[data-act="lessonDone"]');
   assert.match(text(), /Dzisiejsza lekcja/, "po lekcji wracamy do ekranu języka");
   assert.match(text(), /Mapa Twoich tematów pojawi się po 3 lekcjach\. Teraz: 1 z 3/, "lekcja liczy się do mapy tematów");

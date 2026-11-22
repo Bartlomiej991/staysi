@@ -173,3 +173,6 @@ alter table public.lessons
   add column if not exists topic text,
   add column if not exists estimate int;
 create index if not exists lessons_rated_idx on public.lessons (user_id, lang, completed_at) where estimate is not null;
+
+-- Uwagi dla Claude'a (to samo co 005_uwagi.sql)
+alter table public.profiles add column if not exists style_notes text not null default '';

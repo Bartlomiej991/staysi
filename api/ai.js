@@ -2,7 +2,7 @@
 // Serwer sam dokłada z bazy tylko ten kontekst, który jest potrzebny do zadania.
 import { admin, getUser, checkLimits, claudeJson, send, HttpError } from "../lib/server.js";
 
-export const config = { maxDuration: 60 };
+export const config = { maxDuration: 180 };
 
 const LANG = { pl: "Polish", de: "German", es: "Spanish", fr: "French", en: "English", it: "Italian" };
 const BANDS = [["A1", 22, 29], ["A2", 30, 35], ["A2+", 36, 42], ["B1", 43, 50], ["B1+", 51, 58], ["B2", 59, 66], ["B2+", 67, 75], ["C1", 76, 84], ["C2", 85, 90]];
@@ -15,6 +15,9 @@ retention (spaced repetition, the same chunks met again in new contexts, active 
 activation (speak and write from day one, "express over impress", correct only what matters most).
 Teach CHUNKS (useful multi-word phrases), not isolated words. Be warm, concise and encouraging.
 Always answer with a single JSON object and nothing else.`;
+
+// Model piszący lekcje. Domyślnie Sonnet (naturalny język); w Vercel można ustawić LESSON_MODEL=opus albo haiku.
+const LESSON_MODEL = ["haiku", "sonnet", "opus"].includes(process.env.LESSON_MODEL) ? process.env.LESSON_MODEL : "sonnet";
 
 const TOPICS = ["work", "travel", "food", "health", "home", "shopping", "errands", "hobbies", "tech", "culture", "relationships", "education", "nature", "society"];
 const SIZE = {
@@ -117,21 +120,34 @@ Return JSON {"plan": string}.` }] });
       const topic = String(body.topic || "").slice(0, 200);
       const size = SIZE[minutes];
       const form = md === "A"
-        ? `a natural everyday dialogue of ${size.lines} lines between the learner ("me": true, speaker = the learner's name) and another person, about the learner's own life`
+        ? `a natural everyday dialogue of ${size.lines} lines between the learner ("me": true, speaker = the learner's name) and another person (a friend, colleague, neighbour, shop assistant...), set in one concrete situation from the learner's everyday life`
         : md === "B"
           ? `a lively podcast-style conversation of ${size.lines} lines between two hosts (all "me": false) on the topic`
-          : `an engaging prose passage of 3-5 paragraphs (each paragraph is one line, speaker "", "me": false) for semi-extensive reading, literary or journalistic in style`;
+          : `an engaging prose passage of 3-5 paragraphs (each paragraph is one line, speaker "", "me": false) for semi-extensive reading, literary or journalistic in style; vivid and concrete, with any quoted speech following the same natural-dialogue rules`;
       const activation = md === "A"
         ? `"Chunk Mixer": the learner builds their own sentence about themselves from 2-3 chunks (today's and older ones).`
         : md === "B"
           ? `"Language Islands": a ~2-minute personal talk (or 4-6 written sentences) on a personal question linked to the topic.`
           : `"Progressive Compression": summarise the passage and give an opinion, in 3 rounds of 3, 2 and 1 minutes.`;
-      const prompt = `Create one STAYSI lesson in ${L} for this learner.
-Learner card: name ${profile.name}; job ${profile.job}; city ${profile.city}; about ${profile.about}; interests ${(profile.interests || []).join(", ")}; goal ${profile.goal}; native language ${native}.
+      const notes = String(profile.style_notes || "").trim().slice(-1500);
+      const prompt = `Create one STAYSI lesson in ${L}.
+${notes ? `THE LEARNER'S OWN FEEDBACK ON PREVIOUS LESSONS. This overrides any other style instruction below:\n"""${notes}"""\n` : ""}
+WHAT MATTERS MOST: the text must sound like real people talking, so the learner can steal phrases for their own life (Luca Lampariello: interesting, natural input; "express over impress").
+- Write ONE small scene with a reason to talk: a plan to make, a problem to solve, news to share, a small surprise or disagreement. It has a beginning, a turn and an ending.
+- Every line reacts to the line before it: answers the question, reacts ("Echt?", "No way!", "Ach so"), asks back, adds a detail. No two lines in a row that could be swapped without anyone noticing.
+- Introductions and personal facts (name, job) are fine when the scene calls for them, e.g. people meeting. What is NOT fine is a line that ignores the previous one or drops a fact out of nowhere.
+- Use the learner card below only as background for the topic. Use at most ONE detail from it, woven in naturally. Do not quote it.
+- Spoken language for the level: short turns, contractions, fillers and reactions native speakers really use, ellipsis, everyday register. Simple is fine at A1; stiff or textbook-like is not. Each line max ~12 words at A levels.
+- Give the other person a personality and their own life (a name, a mood, an opinion). The learner's character can be "me".
+- Chunks are high-frequency, reusable expressions (e.g. "Hast du Lust, ...?", "Wie wär's mit ...?", "Ich hab keine Ahnung"), not rare nouns.
+- Translations into ${native} are natural and idiomatic, the way a ${native} speaker would say it, not word for word (Luca: understand the meaning first).${md === "A" ? `
+- Luca also compares the two languages to notice how they differ. So for lines whose ${L} structure differs noticeably from ${native} (word order, a preposition, an extra word, an idiom), add "literal": a word-for-word ${native} rendering that mirrors the ${L} structure, e.g. "Hast du Lust auf Kaffee?" -> "Masz (ty) ochotę na kawę?". Use "" when the structure is the same. Do this for about a third of the lines, where it teaches something.` : ""}
+- Before you answer, read the dialogue aloud in your head: would two native speakers really say exactly this, in this order? If any line sounds like a textbook or a form, rewrite it.
+
+Learner card (background only): name ${profile.name}; job ${profile.job}; city ${profile.city}; about ${profile.about}; interests ${(profile.interests || []).join(", ")}; goal ${profile.goal}; native language ${native}.
 Level: ${lvl} (mode ${md}). Recent mistakes to gently recycle: ${(mistakes || []).map(m => m.note).join(" | ") || "none"}.
 Chunks they already know (reuse 2-3 for repetition, do not mark them as new): ${(known || []).map(k => k.chunk).join(", ") || "none"}.
-${!source && !body.source_url && !topic && (ul.lessons_done || 0) % 3 === 2 && (weak.length || unseen.length) ? `Today, stretch the learner: pick a topic from ${weak.length ? `their weaker areas (${weak.join(", ")})` : ""}${weak.length && unseen.length ? " or " : ""}${unseen.length ? `areas they have not practised yet (${unseen.slice(0, 5).join(", ")})` : ""}, linked to their life where possible.
-` : ""}${source ? `Base the lesson on this source, adapted to ${lvl} (simplify vocabulary and grammar for A levels, keep the original style for C):\n"""${source}"""` : topic ? `Topic chosen by the learner: ${topic}.` : `Pick a fresh topic from the learner's interests or daily life.`}
+${!source && !body.source_url && !topic && (ul.lessons_done || 0) % 3 === 2 && (weak.length || unseen.length) ? `Today, stretch the learner: pick a topic from ${weak.length ? `their weaker areas (${weak.join(", ")})` : ""}${weak.length && unseen.length ? " or " : ""}${unseen.length ? `areas they have not practised yet (${unseen.slice(0, 5).join(", ")})` : ""}, linked to their life where possible.\n` : ""}${source ? `Base the lesson on this source, adapted to ${lvl} (simplify vocabulary and grammar for A levels, keep the original style for C):\n"""${source}"""` : topic ? `Topic chosen by the learner: ${topic}.` : `Pick a fresh, concrete everyday situation linked to the learner's interests or daily life.`}
 Format: ${form}. About 10-15% of the words should be new for a ${lvl} learner.
 Mark 4-7 useful NEW chunks per lesson, each copied EXACTLY as it appears in a line.
 Grammar: after reading, the learner sees 2-3 short notes on how the language works in THIS text (noticing, not a lecture). ${md === "A" ? "Pick basics: word order, articles and gender, verb endings, plurals, the most common irregular verbs, question forms." : md === "B" ? "Pick intermediate points: tenses and when to use them, cases, connectors, reflexive or separable verbs, typical collocations." : "Pick advanced points: nuance, register, style, idiomatic structures, near-synonyms."}
@@ -140,10 +156,10 @@ Return JSON:
 {"title": short catchy title in ${native} with one fitting emoji at the start,
  "topic_tag": the general area of this lesson, exactly one of ${JSON.stringify(TOPICS)},
  "intro": one encouraging sentence in ${native},
- "lines": [{"speaker": string, "me": boolean, "text": string in ${L}, "translation": string in ${native}, "chunks": [{"text": exact substring of text, "meaning": short meaning in ${native}, "how": one short line in ${native} on how the chunk is built (form, ending, word order; ALWAYS name irregular forms, e.g. "ging = czas przeszły od gehen, nieregularny"), "" if there is nothing to explain}]}],
+ "lines": [{"speaker": string, "me": boolean, "text": string in ${L}, "translation": string in ${native},${md === "A" ? ` "literal": word-for-word ${native} or "",` : ""} "chunks": [{"text": exact substring of text, "meaning": short meaning in ${native}, "how": one short line in ${native} on how the chunk is built (form, ending, word order; ALWAYS name irregular forms, e.g. "ging = czas przeszły od gehen, nieregularny"), "" if there is nothing to explain}]}],
  "grammar": [2-3 items {"title": short name of the pattern in ${native}, max 6 words, "category": one of "word_order","verbs","nouns","adjectives","prepositions","pronouns","other", "rule": 1-2 simple sentences in ${native} at the learner's level, "example": one sentence copied EXACTLY from the lines that shows it, "example_tr": its translation in ${native}, "extra": one more short ${L} example at the learner's level, "extra_tr": its translation}],
  "activation": {"name": "${md === "A" ? "Chunk Mixer" : md === "B" ? "Language Islands" : "Progressive Compression"}", "task": instruction in ${native} following ${activation}, "chunks": [2-3 chunks to use], "hint": short hint in ${native}}}`;
-      const parsed = await claudeJson(db, { userId: uid, purpose: "lesson", lang, maxTokens: 5000, system: METHOD, messages: [{ role: "user", content: prompt }] });
+      const parsed = await claudeJson(db, { userId: uid, model: LESSON_MODEL, purpose: "lesson", lang, maxTokens: 6000, system: METHOD, messages: [{ role: "user", content: prompt }] });
       const content = parsed; content.mode = md; content.level = lvl;
       const tag = TOPICS.includes(content.topic_tag) ? content.topic_tag : null; content.topic_tag = tag;
       let { data: row, error } = await db.from("lessons").insert({ user_id: uid, lang, minutes, content, topic: tag }).select("id").single();

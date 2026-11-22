@@ -14,6 +14,7 @@
     "test": "node --test --test-reporter=spec tests/*.test.mjs"
   },
   "devDependencies": {
-    "jsdom": "^25.0.1"
+    "jsdom": "^25.0.1",
+    "playwright-core": "^1.65.1"
   }
 }

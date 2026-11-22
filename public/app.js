@@ -179,6 +179,12 @@ async function saveProfile(fields) {
   const { error } = await sb.from("profiles").update(fields).eq("id", uid());
   if (error) toast("Nie udało się zapisać profilu.");
 }
+// Uwagi dla Claude'a zapisujemy osobno, żeby brak kolumny (005_uwagi.sql) nie psuł zapisu profilu
+async function saveNotes(notes) {
+  const { error } = await sb.from("profiles").update({ style_notes: notes }).eq("id", uid());
+  if (error) { toast("Nie zapisano uwag. Uruchom plik 005_uwagi.sql w Supabase."); return false; }
+  S.profile.style_notes = notes; return true;
+}
 async function addToBank(lang, chunk, meaning, context) {
   if (S.bank.find(b => b.lang === lang && b.chunk === chunk)) return false;
   const row = { user_id: uid(), lang, chunk, meaning: meaning || "", context: context || "", strength: 0, due: day(1) };
@@ -388,6 +394,8 @@ function renderMe() {
     <label class="f">Czym się zajmujesz?<input class="field" type="text" id="meJob" value="${esc(P.job)}"></label>
     <label class="f">Gdzie mieszkasz?<input class="field" type="text" id="meCity" value="${esc(P.city)}"></label>
     <label class="f">Coś o tobie<textarea class="field" id="meAbout">${esc(P.about)}</textarea></label>
+    <label class="f">Uwagi dla Claude'a<textarea class="field" id="meNotes" placeholder="np. dialogi mają brzmieć jak prawdziwa rozmowa znajomych, potocznie, bez przedstawiania się">${esc(P.style_notes || "")}</textarea></label>
+    <p class="small muted" style="margin-top:-6px">Claude czyta to przed każdą lekcją. To, co wpiszesz po lekcji w „Co poprawić?”, też tu trafia.</p>
     <div><p class="small" style="font-weight:700;margin-bottom:6px">Zainteresowania</p><div class="chips">${[...new Set([...INTERESTS, ...(P.interests || [])])].map(i => `<button class="chip ${(P.interests || []).includes(i) ? "sel" : ""}" data-act="interest" data-k="${esc(i)}">${esc(i)}</button>`).join("")}</div></div>
     <div><p class="small" style="font-weight:700;margin-bottom:6px">Cel nauki</p><div class="chips">${[...new Set([...GOALS, ...goalList()])].map(g => `<button class="chip ${goalList().includes(g) ? "sel" : ""}" data-act="goal" data-k="${esc(g)}">${esc(g)}</button>`).join("")}</div></div>
     <label class="f">Język ojczysty<select class="field" id="meNative">${Object.entries(LANGS).map(([k, v]) => `<option value="${k}" ${P.native === k ? "selected" : ""}>${v.name}</option>`).join("")}</select></label>
@@ -506,7 +514,7 @@ function renderMat() {
       <div class="tools"><button class="spk" data-act="sayLine" data-k="${i}" aria-label="Odsłuchaj akapit">${I.speaker}</button><button class="spk" data-act="trToggle" data-k="${i}" aria-label="Pokaż tłumaczenie" style="font-size:11px;font-weight:800">PL</button></div></div>`).join("");
   } else {
     body = C.lines.map((ln, i) => `<div class="msg ${ln.me ? "me" : ""} ${L.hl === i ? "hl" : ""}"><span class="who">${esc(ln.speaker)}</span>
-      <div class="b"><span>${step === 0 ? esc(ln.translation) : chunked(ln)}</span>${step > 0 ? `<button class="spk" data-act="sayLine" data-k="${i}" aria-label="Odsłuchaj">${I.speaker}</button>` : ""}</div></div>`).join("");
+      <div class="b"><span>${step === 0 ? `${esc(ln.translation)}${ln.literal ? `<span class="lit">dosłownie: ${esc(ln.literal)}</span>` : ""}` : chunked(ln)}</span>${step > 0 ? `<button class="spk" data-act="sayLine" data-k="${i}" aria-label="Odsłuchaj">${I.speaker}</button>` : ""}</div></div>`).join("");
   }
   const tip = L.tip ? `<div class="tip"><b>${esc(L.tip.text)}</b> = ${esc(L.tip.meaning)}${L.tip.how ? `<br><span class="how">${esc(L.tip.how)}</span>` : ""}<br><span class="small">Zapisane w twoim banku</span></div>` : "";
   const hint = (isC && step === 0) ? `<p class="small" style="color:#CDEBDD">Czytasz od razu oryginał. PL pokazuje tłumaczenie akapitu, gdy utkniesz. Stuknięte słowo trafia do Skarbca.</p>`
@@ -554,6 +562,10 @@ function renderSum() {
       ${L.first ? "" : `<div class="bubble right tilt-r" style="align-self:flex-end;background:var(--sky);color:#10265E;padding:12px 18px"><b style="font-family:var(--display);font-size:30px">${L.ok}/${L.total}</b> powtórek dobrze</div>`}
       <div class="bubble tilt-l" style="align-self:flex-start;background:var(--coral-2);color:#4A1405;padding:12px 18px"><b style="font-family:var(--display);font-size:30px">1</b> zadanie z mówienia</div></div>
     <div class="btn-ghost" style="border-radius:20px;padding:10px 16px;color:var(--lilac);position:relative">Jutro czeka <b style="color:var(--sun)">${due}</b> zwrotów do powtórki</div>
+    <div class="card" style="position:relative;background:rgba(255,255,255,.1);color:#fff;border:0">
+      <label class="f" style="color:#fff">Co poprawić w następnej lekcji? (opcjonalnie)<textarea class="field" id="nextNote" placeholder="np. kwestie się nie łączyły, brzmiało sztucznie, za łatwe słownictwo">${esc(L.note || "")}</textarea></label>
+      ${L.noteSaved ? `<p class="small" style="font-weight:700">Zapisane. Claude weźmie to pod uwagę od następnej lekcji.</p>` : `<button class="btn btn-ghost" style="color:#fff" data-act="saveNote">Wyślij uwagę do Claude'a</button>`}
+    </div>
     <div class="grow"></div><p class="quote soft" style="position:relative">„${esc(q.t)}”<br><b style="color:#fff">${esc(q.a)}</b></p></div>
     <div class="footer bg-indigo"><button class="btn btn-sun" data-act="lessonDone">Gotowe</button></div>`;
 }
@@ -702,13 +714,22 @@ async function act(a, k, el) {
       const name = $("#meName").value.trim() || P.name;
       const fields = { name, job: $("#meJob").value, city: $("#meCity").value, about: $("#meAbout").value, interests: P.interests || [], goal: P.goal || "", native: $("#meNative").value, remind_at: $("#remAt").value };
       if (name !== P.name || fields.native !== P.native) fields.name_vocative = await vocative(name, fields.native);
-      await saveProfile(fields); toast("Zapisano."); return render();
+      await saveProfile(fields);
+      const notes = ($("#meNotes")?.value || "").trim().slice(-1500);
+      if (notes !== (P.style_notes || "")) await saveNotes(notes);
+      toast("Zapisano."); return render();
     }
     case "remind": await saveProfile({ remind: !P.remind }); return render();
     case "logout": await sb.auth.signOut(); return;
 
     /* lekcja */
     case "quit": stopSpeech(); S.langView = L?.lang || S.langView; S.L = null; S.view = S.langView ? "lang" : "home"; toast("Lekcja przerwana. Zapisane zwroty zostają w banku."); render(); return scrollTop();
+    case "saveNote": {
+      const t = ($("#nextNote")?.value || "").trim(); if (!t) return toast("Wpisz, co poprawić.");
+      const all = ((S.profile.style_notes || "") + `\n• ${t}`).trim().slice(-1500);
+      if (await saveNotes(all)) { L.note = t; L.noteSaved = true; render(); }
+      return;
+    }
     case "lessonDone": S.langView = L.lang; S.L = null; S.view = "lang"; render(); return scrollTop();
     case "introDone": L.introSeen = true; render(); return scrollTop();
     case "playPrev": return speak((L.prev?.lines || []).map(l => l.text).join(" "), L.lang);

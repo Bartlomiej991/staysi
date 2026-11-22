@@ -19,3 +19,12 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm test
+        env:
+          CHROME_PATH: /usr/bin/google-chrome
+      # Zrzuty ekranów z testu wyglądu: do pobrania na stronie przebiegu w zakładce Actions
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: zrzuty-ekranow
+          path: tests/screens/
+          retention-days: 14
