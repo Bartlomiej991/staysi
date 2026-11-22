@@ -66,6 +66,11 @@ async function check(name) {
       if (!r.width || cs.display === "none" || cs.visibility === "hidden") continue;
       if (r.right > W + 2 || r.left < -2) out.push(`${el.tagName.toLowerCase()}${el.dataset.act ? `[${el.dataset.act}]` : ""} „${(el.textContent || el.placeholder || "").trim().slice(0, 30)}” (${Math.round(r.left)}–${Math.round(r.right)} px przy ekranie ${W} px)`);
     }
+    // tekst ma stać prosto: żaden kafelek z treścią nie może być przechylony
+    for (const el of document.querySelectorAll(".bubble, .sticker, .time, .tip, .gapcard, .streak, .stamp, .card, .gcard, .wcard, .msg .b")) {
+      const t = getComputedStyle(el).transform;
+      if (t && t !== "none") { const [a, b] = t.replace(/^matrix\(|\)$/g, "").split(",").map(Number); if (Math.abs(b) > 0.001 || Math.abs(a - 1) > 0.001) out.push(`przechylony kafelek „${el.textContent.trim().slice(0, 30)}”`); }
+    }
     if (document.documentElement.scrollWidth > W + 2) out.push(`cała strona przewija się w bok (${document.documentElement.scrollWidth} px)`);
     return out;
   });

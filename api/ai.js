@@ -39,6 +39,25 @@ async function readArticle(url) {
   finally { clearTimeout(t); }
 }
 
+// Drugi krok lekcji: osobny "redaktor" przepisuje tłumaczenia na naturalny, potoczny język ucznia.
+// Pisząc dialog i tłumaczenie naraz, model kopiuje budowę obcego zdania; redaktor widzi tylko sens.
+export async function naturalize(db, { userId, lang, L, native, content }) {
+  const lines = (content.lines || []).map((l, i) => ({ i, speaker: l.speaker, original: l.text, translation: l.translation }));
+  const contrasts = (content.contrasts || []).map((c, i) => ({ i, original: c.target, translation: c.pl }));
+  if (!lines.length) return;
+  try {
+    const out = await claudeJson(db, { userId, model: LESSON_MODEL, purpose: "lesson", lang, maxTokens: 400 + lines.length * 120,
+      system: `You are a native ${native} editor of subtitles for a TV series. You make dialogue sound exactly like real people talk in ${native}. Always answer with a single JSON object and nothing else.`,
+      messages: [{ role: "user", content: `Below is a ${L} conversation with draft ${native} translations. The drafts copy ${L} sentence structure, so they sound translated.
+Rewrite every translation so it is what a ${native} speaker would actually say in this situation, out loud, to a friend: colloquial, short, natural word order and natural ${native} expressions. Keep the meaning and the tone; you may change words and structure freely (e.g. Polish: "A ilu będzie ludzi?" -> "A kto będzie?" or "A ile osób przyjdzie?"; "To wezmę dodatkowo mnóstwo chipsów" -> "No to biorę więcej chipsów"). Keep names. If a draft already sounds natural, keep it.
+Conversation: ${JSON.stringify(lines)}
+Comparison sentences (how a ${native} speaker would say the original): ${JSON.stringify(contrasts)}
+Return JSON {"lines":[{"i": number, "translation": string}], "contrasts":[{"i": number, "translation": string}]}.` }] });
+    for (const e of out.lines || []) if (content.lines[e.i] && typeof e.translation === "string" && e.translation.trim()) content.lines[e.i].translation = e.translation.trim();
+    for (const e of out.contrasts || []) if (content.contrasts?.[e.i] && typeof e.translation === "string" && e.translation.trim()) content.contrasts[e.i].pl = e.translation.trim();
+  } catch (e) { console.error("Redakcja tłumaczeń nie wyszła, zostają szkice:", e.message); }
+}
+
 export default async function handler(req, res) {
   if (req.method !== "POST") return send(res, 405, { error: "Użyj POST." });
   const db = admin();
@@ -164,6 +183,7 @@ Return JSON:
  "activation": {"name": "${md === "A" ? "Chunk Mixer" : md === "B" ? "Language Islands" : "Progressive Compression"}", "task": instruction in ${native} following ${activation}, "chunks": [2-3 chunks to use], "hint": short hint in ${native}}}`;
       const parsed = await claudeJson(db, { userId: uid, model: LESSON_MODEL, purpose: "lesson", lang, maxTokens: 6000, system: METHOD, messages: [{ role: "user", content: prompt }] });
       const content = parsed; content.mode = md; content.level = lvl;
+      await naturalize(db, { userId: uid, lang, L, native, content });
       const tag = TOPICS.includes(content.topic_tag) ? content.topic_tag : null; content.topic_tag = tag;
       let { data: row, error } = await db.from("lessons").insert({ user_id: uid, lang, minutes, content, topic: tag }).select("id").single();
       if (error) ({ data: row, error } = await db.from("lessons").insert({ user_id: uid, lang, minutes, content }).select("id").single()); // gdy 004_tematy.sql nie jest jeszcze uruchomiony

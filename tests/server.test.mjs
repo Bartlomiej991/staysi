@@ -24,3 +24,19 @@ test("claudeJson ponawia zapytanie z większym limitem, gdy odpowiedź jest uci�
   assert.equal(calls[1].max_tokens, 2000);
   assert.equal(logged.length, 2, "oba zapytania zapisane w kosztach");
 });
+
+test("redaktor tłumaczeń podmienia kalki na naturalny polski, a przy błędzie zostawia szkic", async () => {
+  process.env.SUPABASE_URL = process.env.SUPABASE_URL || "http://localhost";
+  process.env.SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "x";
+  const { naturalize } = await import("../api/ai.js");
+  const db = { from: () => ({ insert: async () => ({}) }) };
+  const content = { lines: [{ speaker: "Bartek", text: "Klar! Wie viele Leute kommen eigentlich?", translation: "Jasne! A ilu będzie ludzi?" }],
+    contrasts: [{ target: "Wie viele Leute kommen eigentlich?", pl: "A ilu będzie ludzi?" }] };
+  globalThis.fetch = async () => ({ ok: true, json: async () => ({ content: [{ type: "text", text: '{"lines":[{"i":0,"translation":"Jasne, a kto będzie?"}],"contrasts":[{"i":0,"translation":"A kto w ogóle przyjdzie?"}]}' }], usage: { input_tokens: 5, output_tokens: 5 }, stop_reason: "end_turn" }) });
+  await naturalize(db, { userId: "u", lang: "de", L: "German", native: "Polish", content });
+  assert.equal(content.lines[0].translation, "Jasne, a kto będzie?");
+  assert.equal(content.contrasts[0].pl, "A kto w ogóle przyjdzie?");
+  globalThis.fetch = async () => { throw new Error("sieć leży"); };
+  await naturalize(db, { userId: "u", lang: "de", L: "German", native: "Polish", content });
+  assert.equal(content.lines[0].translation, "Jasne, a kto będzie?", "przy błędzie lekcja nie przepada");
+});

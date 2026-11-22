@@ -554,7 +554,7 @@ function renderSum() {
   const L = S.L, st = streak(), q = quote(), due = S.bank.filter(b => b.lang === L.lang && b.introduced !== false && b.due <= day(1)).length;
   return `<div class="screen bg-indigo">
     <div class="blob" style="width:280px;height:280px;background:var(--indigo-2);bottom:-120px;left:-100px"></div>
-    <div class="row" style="justify-content:flex-start;gap:14px;position:relative"><div style="width:74px;height:74px;border-radius:24px;background:var(--sun);display:flex;align-items:center;justify-content:center;transform:rotate(-6deg);box-shadow:0 5px 0 var(--sun-dark)">${I.check}</div>
+    <div class="row" style="justify-content:flex-start;gap:14px;position:relative"><div style="width:74px;height:74px;border-radius:24px;background:var(--sun);display:flex;align-items:center;justify-content:center;box-shadow:0 5px 0 var(--sun-dark)">${I.check}</div>
       ${st ? `<span class="streak" style="background:#fff">${I.flame}${st} ${st === 1 ? "dzień" : "dni"} z rzędu!</span>` : ""}</div>
     <h1 style="font-size:54px;position:relative">Brawo,<br>${esc(greetName())}!</h1>
     <div style="display:flex;flex-direction:column;gap:10px;position:relative">
