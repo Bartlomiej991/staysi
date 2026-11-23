@@ -23,6 +23,7 @@ before(async () => {
 test("inne konto nie widzi zakładki Koszty i nie wejdzie do niej", async () => {
   assert.ok($('[data-act="tab"][data-k="me"]'), "nawigacja jest");
   assert.ok(!$('[data-act="tab"][data-k="cost"]'), "brak zakładki Koszty");
+  await click('[data-act="tab"][data-k="me"]'); assert.ok(!$('[data-act="openBackup"]'), "brak kopii zapasowych"); await click('[data-act="tab"][data-k="home"]');
   // podrobiony przycisk (np. ktoś dopisze go w konsoli) też nie otwiera Kosztów
   const fake = document.createElement("button"); fake.dataset.act = "tab"; fake.dataset.k = "cost";
   document.querySelector(".app").appendChild(fake); await click(fake);

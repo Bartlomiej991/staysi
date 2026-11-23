@@ -86,6 +86,8 @@ function wordCard(w, lang, withEx = true) {
 }
 
 /* ---------- ekran języka ---------- */
+const STAGE = { review: "na etapie powtórki", mat: "na etapie tekstu", act: "na etapie mówienia" };
+const ago = t => { const m = Math.round((Date.now() - (t || 0)) / 60000); return m < 2 ? "przed chwilą" : m < 60 ? `${m} min temu` : m < 1440 ? `${Math.round(m / 60)} godz. temu` : `${Math.round(m / 1440)} dni temu`; };
 export function renderLang() {
   const S = C.S, lang = S.langView, ul = S.langs[lang];
   if (!ul) return "";
@@ -93,6 +95,7 @@ export function renderLang() {
   let next = "";
   if (L && !D) { const d = learned(lang).map(w => w.due).sort()[0]; const days = Math.round((new Date(d) - new Date(C.day(0))) / 864e5); next = days <= 1 ? "Następna powtórka jutro." : `Następna powtórka za ${days} dni.`; }
   const g = forLang(lang), cats = [...new Set(g.map(x => x.category))].map(c => CATS[c] || CATS.other);
+  const pend = C.pendingLesson ? C.pendingLesson(lang) : null;
   return `<div class="screen bg-ground lang">
     <header class="lhead">${C.landmark(lang)}
       <div class="row"><button class="pillbtn"  data-act="tab" data-k="home">← Start</button><button class="pillbtn"  data-act="openGuide">Jak się uczyć?</button></div>
@@ -100,9 +103,13 @@ export function renderLang() {
     </header>
 
     <section class="sec sec-main">
-      <h2>Dzisiejsza lekcja</h2>
+      ${pend ? `<h2>Niedokończona lekcja</h2>
+      <p><b>${C.esc(pend.C.title || "Lekcja")}</b><br><span class="muted">${STAGE[pend.stage] || ""} · zapisana ${C.esc(ago(pend.savedAt))}</span></p>
+      <button class="btn btn-indigo" data-act="resume" data-k="${lang}">Dokończ lekcję</button>
+      <div class="row"><button class="linkbtn" data-act="start" data-k="${lang}">Zacznij nową</button><button class="linkbtn" data-act="dropPending" data-k="${lang}">Usuń zapis</button></div>` : `<h2>Dzisiejsza lekcja</h2>
       <p>Powtórka, nowy tekst i mówienie.</p>
-      <button class="btn btn-indigo" data-act="start" data-k="${lang}">Zacznij lekcję</button>
+      <button class="btn btn-indigo" data-act="start" data-k="${lang}">${C.lessonsToday?.(lang) ? "Kolejna lekcja" : "Zacznij lekcję"}</button>`}
+      ${C.todayBox ? C.todayBox(lang) : ""}
       ${topicMap(lang, ul.score)}
     </section>
 
@@ -156,7 +163,7 @@ async function startSession(kind) {
 function distract(w, lang) { return shuffle(all(lang).filter(x => x !== w)).slice(0, 3); }
 function head(W) {
   const total = W.intro >= 0 ? W.items.length : W.queue.length, done = W.intro >= 0 ? W.intro : W.pos;
-  return `<div class="row"><span class="sticker st-sun">${C.esc(W.title)}</span><button class="pillbtn"  data-act="wQuit">✕ Wyjdź</button></div>
+  return `<div class="row"><span class="sticker st-sun">${C.esc(W.title)}</span><span class="row" style="gap:8px">${C.helpBtn(W.kind === "review" ? "wReview" : W.intro >= 0 && W.intro < W.items.length ? "wIntro" : "wPractice")}<button class="pillbtn"  data-act="wQuit">✕ Wyjdź</button></span></div>
   <div class="bar"  aria-hidden="true"><i style="width:${Math.round(done / Math.max(1, total) * 100)}%;background:var(--g)"></i></div>`;
 }
 

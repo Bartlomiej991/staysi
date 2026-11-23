@@ -1,16 +1,17 @@
 // Atrapa Supabase działająca w prawdziwej przeglądarce (test wyglądu). Dane trzymane w pamięci strony.
 export const db = window.__db = { profiles: [{ id: "u1", name: "", name_vocative: "", native: "pl", job: "", city: "", about: "", interests: [], goal: "", budget_usd: 5, remind: true, remind_at: "19:00", onboarded: false }],
-  user_languages: [], bank: [], lessons: [], usage: [], grammar: [], mistakes: [] };
+  user_languages: [], bank: [], lessons: [], usage: [], grammar: [], mistakes: [], activity: [] };
 let nextId = 1;
 function table(name) {
   const rows = db[name];
   const st = { filters: [], op: "select", payload: null, one: false,
-    select() { return st; }, eq(k, v) { st.filters.push(r => r[k] === v); return st; }, gte() { return st; }, not(k) { st.filters.push(r => r[k] != null); return st; }, order() { return st; }, limit() { return st; },
+    select() { return st; }, eq(k, v) { st.filters.push(r => r[k] === v); return st; }, gte() { return st; }, not(k) { st.filters.push(r => r[k] != null); return st; }, is(k, v) { st.filters.push(r => (r[k] ?? null) === v); return st; }, in(k, v) { st.filters.push(r => v.includes(r[k])); return st; }, lte() { return st; }, delete() { st.op = "delete"; return st; }, order() { return st; }, limit() { return st; },
     single() { st.one = true; return st; },
     update(p) { st.op = "update"; st.payload = p; return st; }, upsert(p) { st.op = "upsert"; st.payload = p; return st; }, insert(p) { st.op = "insert"; st.payload = p; return st; },
     then(res, rej) {
       let out;
-      if (st.op === "update") { rows.filter(r => st.filters.every(f => f(r))).forEach(r => Object.assign(r, st.payload)); out = { data: null, error: null }; }
+      if (st.op === "delete") { for (let i = rows.length - 1; i >= 0; i--) if (st.filters.every(f => f(rows[i]))) rows.splice(i, 1); out = { data: null, error: null }; }
+      else if (st.op === "update") { rows.filter(r => st.filters.every(f => f(r))).forEach(r => Object.assign(r, st.payload)); out = { data: null, error: null }; }
       else if (st.op === "upsert" || st.op === "insert") { const p = { id: nextId++, ...st.payload }; rows.push(p); out = { data: st.one ? p : [p], error: null }; }
       else { const d = rows.filter(r => st.filters.every(f => f(r))); out = { data: st.one ? d[0] : d, error: null }; }
       return Promise.resolve(out).then(res, rej);

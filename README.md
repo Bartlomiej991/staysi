@@ -73,3 +73,7 @@ See [docs/INSTRUKCJA.md](docs/INSTRUKCJA.md) (Polish). In short: run `supabase/s
 The learning method is inspired by the work of [Luca Lampariello](https://lucalampariello.com). STAYSI is an independent project and is not affiliated with him.
 
 Built by Bartłomiej with Claude as a coding assistant: I designed the product, made the decisions and directed the work; Claude helped write the code.
+
+## Kopie zapasowe
+
+Co niedzielę w nocy GitHub Actions w osobnym, prywatnym repozytorium (`staysi-kopie`) uruchamia `scripts/backup.mjs` z tego repozytorium: pobiera całą bazę, szyfruje ją hasłem (AES-256-GCM, `scripts/backup.mjs`) i trzyma jako artefakt przez 90 dni. W aplikacji (O mnie → Kopie zapasowe, tylko konto właściciela) widać listę kopii, można zrobić kopię od razu i przywrócić wybraną: po podglądzie zawartości i wpisaniu `PRZYWRÓĆ`. Przed przywróceniem serwer zapisuje stan bieżący (tabela `snapshots`), więc da się to cofnąć. Odtworzenie bez aplikacji: `scripts/restore.mjs`.

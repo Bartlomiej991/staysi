@@ -76,8 +76,13 @@ test("pierwsza lekcja: bez powtórki, gramatyka, barometr, mówienie", async () 
   assert.match(text(), /Krok 1 · tłumaczenie/, "pierwsza lekcja zaczyna się od nowego materiału");
   assert.match(text(), /dosłownie: Ja chciałbym chętnie jedną kawę\./, "na poziomie A widać tłumaczenie dosłowne");
   await click('[data-act="matNext"]');
+  assert.match(text(), /czytaj: HA-lo was MÖŚ-test du/, "na poziomie A pod kwestią jest wymowa polskimi literami");
+  await click('[data-act="help"]');
+  assert.match(text(), /Oryginał: jak to zrobić/); assert.match(text(), /Czytaj na głos zdanie po zdaniu/, "ściągawka do tego kroku");
+  await click('.helppop [data-act="helpClose"]'); assert.ok(!$(".helppop"), "ściągawka się zamyka");
   await click('[data-act="chunk"]', 40);
   assert.match(text(), /möchtest = forma od mögen/, "stuknięty zwrot pokazuje, jak jest zbudowany");
+  assert.match(text(), /czytaj: was MÖŚ-test du/); assert.match(text(), /ö: mów e/, "wymowa zwrotu i trudny dźwięk");
   assert.equal(db.bank.length, 1);
   await click('[data-act="matNext"]'); await click('[data-act="matNext"]');
   assert.match(text(), /Jak to jest zbudowane/); assert.match(text(), /Czasownik na 2\. miejscu/);
@@ -94,6 +99,9 @@ test("pierwsza lekcja: bez powtórki, gramatyka, barometr, mówienie", async () 
   await click('[data-act="baro"][data-k="1"]');
   await click('[data-act="actBack"]'); await click('[data-act="baro"][data-k="1"]');
   assert.equal(db.user_languages.find(l => l.lang === "de").difficulty_shift, 1, "ponowny wybór barometru się nie sumuje");
+  assert.match(text(), /czytaj: iś MÖŚ-te GERN/, "zwroty do mówienia z wymową");
+  await click('[data-act="help"]'); assert.match(text(), /Mówienie: jak to zrobić/); assert.match(text(), /2–3 krótkie, pełne zdania/, "rada dla poziomu A");
+  await click('.helppop [data-act="helpClose"]');
   await type("#act", "Am Wochenende ich möchte gern spielen"); await click('[data-act="actSend"]', 80);
   assert.match(text(), /Am Wochenende möchte ich gern spielen/);
   await type("#clarify", "chodziło mi o pływanie");
@@ -108,7 +116,14 @@ test("pierwsza lekcja: bez powtórki, gramatyka, barometr, mówienie", async () 
   await click('[data-act="saveNote"]');
   assert.match(db.profiles[0].style_notes, /• kwestie się nie łączyły/, "uwaga po lekcji trafia do uwag dla Claude'a");
   assert.match(text(), /Zapisane\. Claude weźmie to pod uwagę/);
+  // po lekcji: propozycja filmu z poradami i kanałami na poziom
+  assert.match(text(), /Teraz albo wieczorem: film/); assert.match(text(), /Nicos Weg/);
+  await click('[data-act="vidOpen"]');
+  await click('[data-act="vidMin"][data-k="20"]'); await type("#vidTitle", "Easy German"); await click('[data-act="vidSave"]', 40);
+  assert.equal(db.activity.length, 1); assert.equal(db.activity[0].minutes, 20); assert.equal(db.activity[0].title, "Easy German");
+  assert.match(text(), /Masz już 20 min filmu/);
   await click('[data-act="lessonDone"]');
+  assert.match(text(), /Lekcja\s*15 min, zrobiona/); assert.match(text(), /Film\s*20 min · Easy German/, "dzień w kafelku języka");
   assert.match(text(), /Dzisiejsza lekcja/, "po lekcji wracamy do ekranu języka");
   assert.match(text(), /Mapa Twoich tematów pojawi się po 3 lekcjach\. Teraz: 1 z 3/, "lekcja liczy się do mapy tematów");
 });
@@ -117,7 +132,14 @@ test("druga lekcja zaczyna się od powtórki, a ✕ wraca do języka", async () 
   await click('[data-act="start"][data-k="de"]'); await click('[data-act="time"][data-k="10"]', 80);
   assert.match(text(), /Powtórka/);
   await click('[data-act="quit"]');
-  assert.match(text(), /Dzisiejsza lekcja/);
+  // przerwana lekcja jest zapisana (telefon + baza) i można ją dokończyć
+  assert.match(text(), /Niedokończona lekcja/); assert.match(text(), /Dokończ lekcję/);
+  const key = Object.keys(localStorage).find(k => k.startsWith("staysiLesson:")); assert.ok(key && JSON.parse(localStorage.getItem(key)).C, "stan lekcji zapisany na telefonie");
+  await click('[data-act="resume"][data-k="de"]', 40);
+  assert.match(text(), /Powtórka/, "wraca do tego samego miejsca");
+  await click('[data-act="quit"]');
+  await click('[data-act="dropPending"][data-k="de"]', 40);
+  assert.match(text(), /Dzisiejsza lekcja/); assert.equal(localStorage.getItem(key), null, "zapis usunięty");
 });
 
 test("bank słówek: dodawanie, lekcja, powtórka, lista", async () => {

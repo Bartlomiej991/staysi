@@ -147,3 +147,27 @@ export async function act(a, k) {
   }
   return false;
 }
+
+/* ================= Ściągawka „?”: jak dobrze zrobić ten krok ================= */
+// [poziomy, tekst]: poziomy "ABC" = dla wszystkich, "A" = tylko poziom A itd.
+const HELP = {
+  review: ["Powtórka", [["ABC", "Przeczytaj polskie zdanie i spróbuj powiedzieć całe zdanie w języku nauki, nie tylko brakujący zwrot."], ["ABC", "Najpierw z pamięci, dopiero potem wpisz albo podyktuj."], ["A", "Wystarczy sam zwrot. Powiedz go na głos 2 razy."], ["BC", "Mów naturalnym tempem, jakbyś to mówił w rozmowie."], ["ABC", "Błąd to nic złego: zwrot wróci na końcu powtórki i w kolejnych dniach."]]],
+  translate: ["Tłumaczenie", [["ABC", "Przeczytaj polską wersję i zrozum sens całej sceny."], ["ABC", "Przy każdej kwestii pomyśl, jak powiedziałbyś to w języku nauki, zanim zobaczysz oryginał."], ["A", "Zerknij na tłumaczenie dosłowne: pokazuje, jak zdanie jest zbudowane."], ["ABC", "Nie szukaj ideału. Chodzi o próbę, za chwilę porównasz ją z oryginałem."]]],
+  original: ["Oryginał", [["ABC", "Czytaj na głos zdanie po zdaniu."], ["ABC", "Porównuj z tym, co przed chwilą sam wymyśliłeś. Różnice to Twoja nauka."], ["ABC", "Stukaj zakreślone zwroty: dostaniesz wyjaśnienie, a zwrot trafi do banku."], ["A", "Przy trudnym słowie stuknij głośnik i powtórz za lektorem."], ["BC", "Zwróć uwagę, jak Niemiec, Hiszpan czy Włoch mówi to inaczej niż Polak."]]],
+  listen: ["Słuchanie", [["ABC", "Najpierw posłuchaj całości bez patrzenia w tekst („Odtwórz całość”)."], ["ABC", "Drugi raz z tekstem. Zatrzymuj się po trudnych kwestiach."], ["ABC", "Powtarzaj za lektorem tym samym rytmem i melodią (shadowing)."], ["A", "Za szybko? Zwolnij tempo w O mnie → Lektor."]]],
+  read: ["Czytanie", [["ABC", "Przeczytaj tekst raz w całości dla sensu, drugi raz wolniej."], ["ABC", "Zapisuj zwroty, których sam chcesz używać, a nie pojedyncze słowa."], ["ABC", "Jeden akapit przeczytaj na głos."]]],
+  grammar: ["Gramatyka", [["ABC", "Przeczytaj zasadę i przykład, a potem wymyśl własne zdanie z tym wzorem."], ["ABC", "Poszukaj tego wzoru w dzisiejszym dialogu."], ["ABC", "Nie ucz się reguł na pamięć. Zasada trafia do „Moja gramatyka”, wrócisz do niej."]]],
+  baro: ["Barometr", [["ABC", "Oceń szczerze, od tego zależy trudność kolejnych lekcji."], ["ABC", "„W sam raz” to: rozumiesz większość, ale musisz się skupić."]]],
+  speak: ["Mówienie", [["ABC", "Najpierw pomyśl, potem mów na głos albo podyktuj. Nie tłumacz słowo w słowo z polskiego."], ["ABC", "Użyj 2–3 zwrotów z dzisiejszej lekcji."], ["A", "Wystarczą 2–3 krótkie, pełne zdania."], ["B", "Celuj w 5–6 zdań: odpowiedz i dodaj jeden szczegół albo przykład."], ["C", "Mów jak w rozmowie: uzasadnij zdanie, dodaj przykład, zadaj pytanie."], ["ABC", "Po poprawce przeczytaj poprawioną wersję na głos 2 razy."]]],
+  wIntro: ["Nowe słówka", [["ABC", "Odsłuchaj słówko i powtórz na głos 2 razy."], ["ABC", "Wymowa jest zapisana polskimi literami, wielkie litery to akcent."], ["ABC", "Przeczytaj przykład i wyobraź sobie tę sytuację. Zdanie zapamiętasz lepiej niż samo słowo."]]],
+  wPractice: ["Ćwiczenie", [["ABC", "Odpowiadaj z pamięci, zanim spojrzysz na podpowiedzi."], ["ABC", "Gdy wpisujesz słówko, powiedz je też na głos."], ["ABC", "Błędne słówko wróci kilka pozycji dalej, to normalne."]]],
+  wReview: ["Powtórka słówek", [["ABC", "Najpierw powiedz całe zdanie na głos, potem sprawdź."], ["ABC", "Oceniaj uczciwie „Umiałem / Jeszcze nie”: od tego zależy termin następnej powtórki."]]]
+};
+export function helpPop(key, mode) {
+  const h = HELP[key]; if (!h) return "";
+  const tips = h[1].filter(([lv]) => lv.includes(mode || "B")).map(([, t]) => t);
+  return `<div class="overlay clear" data-act="helpClose"><div class="helppop" role="dialog" aria-label="Jak to zrobić: ${C.esc(h[0])}">
+    <div class="row"><b>${C.esc(h[0])}: jak to zrobić</b><button class="x" data-act="helpClose" aria-label="Zamknij">${C.I.close}</button></div>
+    <ul class="tips">${tips.map(t => `<li>${C.esc(t)}</li>`).join("")}</ul></div></div>`;
+}
+export const helpBtn = key => `<button class="helpbtn" data-act="help" data-k="${key}" aria-label="Jak zrobić ten krok">?</button>`;

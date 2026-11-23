@@ -3,6 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import * as Words from "./words.js";
 import * as Learn from "./learn.js";
 import { scene, landmark } from "./scenes.js";
+import * as Prog from "./progress.js";
 
 /* ================= Dane stałe ================= */
 const LANGS = {
@@ -47,6 +48,7 @@ const I = {
   check: '<svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#1E1B3A" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg>',
   home: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>',
   book: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"/><path d="M4 21V5"/><path d="M9 8h6"/></svg>',
+  cal: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15" rx="3"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>',
   wallet: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="6" width="18" height="14" rx="3"/><path d="M3 10h18"/><path d="M16 15h2"/></svg>',
   user: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg>'
 };
@@ -255,21 +257,33 @@ function dictate(targetId, lang, btn) {
 async function loadAll() {
   const id = uid();
   const monthStart = new Date(); monthStart.setDate(1); monthStart.setHours(0, 0, 0, 0);
-  const since = new Date(); since.setDate(since.getDate() - 120);
-  const [p, l, b, u, ls, g, rt] = await Promise.all([
+  const since = new Date(); since.setDate(since.getDate() - 400);
+  const [p, l, b, u, ls, g, rt, pend, av] = await Promise.all([
     sb.from("profiles").select("*").eq("id", id).single(),
     sb.from("user_languages").select("*"),
     sb.from("bank").select("*").order("created_at", { ascending: false }),
     sb.from("usage").select("*").gte("created_at", monthStart.toISOString()).order("created_at", { ascending: false }),
-    sb.from("lessons").select("lang,completed_at").not("completed_at", "is", null).gte("completed_at", since.toISOString()),
+    sb.from("lessons").select("*").not("completed_at", "is", null).gte("completed_at", since.toISOString()),
     sb.from("grammar").select("*").order("updated_at", { ascending: false }),
-    sb.from("lessons").select("lang,topic,estimate").not("estimate", "is", null).order("completed_at", { ascending: false }).limit(300)
+    sb.from("lessons").select("lang,topic,estimate").not("estimate", "is", null).order("completed_at", { ascending: false }).limit(300),
+    sb.from("lessons").select("id,lang,state,created_at").is("completed_at", null).not("state", "is", null).gte("created_at", new Date(Date.now() - 3 * 864e5).toISOString()).order("created_at", { ascending: false }).limit(12),
+    sb.from("activity").select("*").gte("day", since.toLocaleDateString("sv-SE")).order("day", { ascending: false })
   ]);
   S.grammar = g?.data || [];
+  // niedokończone lekcje z bazy (np. zaczęte na innym urządzeniu); nowszy zapis wygrywa
+  S.pending = {};
+  for (const r of ((pend && !pend.error && pend.data) || [])) {
+    const loc = loadLocal(PKEY(r.lang), null), st = r.state;
+    if (!st?.C || S.pending[r.lang]) continue;
+    S.pending[r.lang] = loc && loc.id === st.id && (loc.savedAt || 0) > (st.savedAt || 0) ? loc : st;
+  }
   S.rated = (rt && !rt.error && rt.data) || [];
   S.profile = p.data || { id, name: "", onboarded: false, interests: [] };
   S.langs = {}; (l.data || []).forEach(r => (S.langs[r.lang] = r));
   S.bank = b.data || []; S.usage = u.data || [];
+  S.activity = (av && !av.error && av.data) || [];
+  // ukończone lekcje: do kalendarza i prognozy (minuty, punkty po lekcji)
+  S.done = (ls.data || []).map(r => ({ id: r.id, lang: r.lang, d: new Date(r.completed_at).toLocaleDateString("sv-SE"), at: +new Date(r.completed_at), minutes: r.minutes || 0, score: r.score ?? null }));
   S.doneDays = {}; (ls.data || []).forEach(r => { const d = new Date(r.completed_at).toLocaleDateString("sv-SE"); (S.doneDays[d] = S.doneDays[d] || new Set()).add(r.lang); });
 }
 async function reloadUsage() {
@@ -302,6 +316,34 @@ async function addToBank(lang, chunk, meaning, context) {
 }
 
 /* ================= Render ================= */
+/* ================= Zapisywanie lekcji w trakcie =================
+   Po każdym przerysowaniu lekcja ląduje w pamięci telefonu, a po zmianie kroku także w bazie (lessons.state),
+   więc po przypadkowym wyjściu albo na innym urządzeniu można ją dokończyć bez generowania od nowa. */
+const PKEY = lang => `staysiLesson:${uid()}:${lang}`;
+const SKIP = new Set(["hl", "tip", "cardFb"]);
+function snap(L) { const o = {}; for (const k in L) if (!SKIP.has(k)) o[k] = L[k]; o.savedAt = Date.now(); return o; }
+let lastSaved = "";
+function saveLesson() {
+  const L = S.L; if (!L || S.view !== "lesson" || L.stage === "sum") return;
+  const o = snap(L); saveLocal(PKEY(L.lang), o); (S.pending = S.pending || {})[L.lang] = o;
+  const key = `${L.id}:${L.stage}:${L.step}:${L.i}:${L.added.length}:${(L.rounds || []).length}:${!!L.fb}`;
+  if (key !== lastSaved && L.id) { lastSaved = key; sb.from("lessons").update({ state: o }).eq("id", L.id).then(() => {}, () => {}); }
+}
+function dropLesson(lang, id) {
+  try { localStorage.removeItem(PKEY(lang)); } catch {}
+  if (S.pending) delete S.pending[lang];
+  if (id) sb.from("lessons").update({ state: null }).eq("id", id).then(() => {}, () => {});
+}
+// Niedokończona lekcja danego języka: z telefonu albo z bazy (inne urządzenie); starsze niż 3 dni przepadają
+function pendingLesson(lang) {
+  const p = S.pending?.[lang] || loadLocal(PKEY(lang), null);
+  return p && p.C && Date.now() - (p.savedAt || 0) < 3 * 864e5 ? p : null;
+}
+function resumeLesson(lang) {
+  const p = pendingLesson(lang); if (!p) return;
+  S.L = { ...p, hl: -1, tip: null, cardFb: null }; S.view = "lesson"; render(); scrollTop();
+}
+
 function render() {
   const app = $("#app"); let html = "";
   if (S.view === "loading") html = `<div class="screen center-screen bg-indigo"><div class="logo big">STAYSI</div></div>`;
@@ -316,9 +358,12 @@ function render() {
   else if (S.view === "grammar") html = Learn.renderGrammar();
   else if (S.view === "guide") html = Learn.renderGuide();
   else if (S.view === "voice") html = renderVoice();
+  else if (S.view === "backup") html = renderBackup();
   else html = renderMain();
   if (S.sheet) html += renderSheet();
   if (S.add) html += renderAdd();
+  if (S.vid) html += Prog.renderVideoSheet();
+  if (S.help) html += Learn.helpPop(S.help, S.L ? S.L.C.mode : S.W ? modeOf(S.langs[S.W.lang]?.score || 30) : "B");
   if (S.busy) html += `<div class="busy" role="status" aria-live="polite"><div class="spinner"></div><h2>${esc(S.busy)}</h2></div>`;
   if (rec) stopDictation();
   // Ten sam ekran po przerysowaniu zostaje w tym samym miejscu (np. po stuknięciu zwrotu), nowy ekran zaczyna od góry
@@ -327,6 +372,7 @@ function render() {
   lastKey = key; if (top) { const sc = document.querySelector(".screen"); if (sc) sc.scrollTop = top; }
   afterRender();
   syncHistory();
+  saveLesson();
 }
 let lastKey = "";
 function screenKey() {
@@ -341,8 +387,8 @@ function setHl(i) {
   if (cur && cur.scrollIntoView) { try { cur.scrollIntoView({ behavior: "smooth", block: "center" }); } catch { try { cur.scrollIntoView(); } catch {} } }
 }
 const scrollTop = () => { const s = document.querySelector(".screen"); if (s) s.scrollTop = 0; };
-const CTX = { scene, landmark, S, get sb() { return sb; }, ai, esc, speak, toast, withBusy, render, scrollTop, day, uid, LANGS, flag, band, pct, nextBand, I };
-Words.init(CTX); Learn.init(CTX);
+const CTX = { helpBtn: k => Learn.helpBtn(k), pendingLesson: l => pendingLesson(l), todayBox: l => Prog.todayBox(l), lessonsToday: l => Prog.dayStats(l, day(0)).lessons, $, scene, landmark, S, get sb() { return sb; }, ai, esc, speak, toast, withBusy, render, scrollTop, day, uid, LANGS, flag, band, pct, nextBand, I };
+Words.init(CTX); Learn.init(CTX); Prog.init(CTX);
 
 function renderSetup() {
   return `<div class="screen bg-indigo"><h2>Brak konfiguracji</h2><p>Serwer nie zwrócił adresu Supabase. Sprawdź zmienne środowiskowe SUPABASE_URL i SUPABASE_ANON_KEY w Vercel.</p></div>`;
@@ -445,9 +491,9 @@ function renderPlacement() {
 function renderMain() {
   if (S.view === "cost" && !S.owner) S.view = "home";
   const v = S.view, cls = v === "home" ? "bg-indigo" : v === "cost" ? "bg-ink" : "bg-ground";
-  const body = v === "home" ? renderHome() : v === "bank" ? renderBank() : v === "cost" ? renderCost() : renderMe();
+  const body = v === "home" ? renderHome() : v === "bank" ? renderBank() : v === "cal" ? Prog.renderCalendar() : v === "cost" ? renderCost() : renderMe();
   return `<div class="screen ${cls}">${body}</div>
-  <div class="${cls}"><nav class="nav">${[["home", I.home, "Start"], ["bank", I.book, "Słówka"], ["cost", I.wallet, "Koszty"], ["me", I.user, "O mnie"]]
+  <div class="${cls}"><nav class="nav">${[["home", I.home, "Start"], ["bank", I.book, "Słówka"], ["cal", I.cal, "Kalendarz"], ["cost", I.wallet, "Koszty"], ["me", I.user, "O mnie"]]
     .filter(([k]) => k !== "cost" || S.owner).map(([k, ic, l]) => `<button class="${v === k ? "on" : ""}" data-act="tab" data-k="${k}" ${v === k ? 'aria-current="page"' : ""}>${ic}${l}</button>`).join("")}</nav></div>`;
 }
 function renderHome() {
@@ -463,7 +509,7 @@ function renderHome() {
         <div class="row"><span class="hi" style="display:flex;align-items:center;gap:10px">${flag(l.lang, 34)}${LANGS[l.lang].hi}</span><b>${band(l.score)[0]}</b></div>
         <span style="font-weight:600">${LANGS[l.lang].name} · ${l.score} pkt · ${pct(l.score)}% drogi do ${nextBand(l.score)}</span>
         <div class="bar" aria-hidden="true"><i style="width:${pct(l.score)}%"></i></div>
-        ${done ? `<span class="stamp">Zrobione dziś</span>` : ""}
+        ${done ? `<span class="stamp">Zrobione dziś${Prog.dayStats(l.lang, day(0)).video ? ` · film ${Prog.dayStats(l.lang, day(0)).video} min` : ""}</span>` : (Prog.dayStats(l.lang, day(0)).video ? `<span class="stamp">Dziś film: ${Prog.dayStats(l.lang, day(0)).video} min</span>` : "")}
         ${Words.dueCount(l.lang) ? `<span class="small" style="font-weight:700">${Words.dueCount(l.lang)} słówek czeka na powtórkę</span>` : ""}
         <button class="go" data-act="openLang" data-k="${l.lang}" ${done ? 'style="border:2px solid currentColor;font-size:15px;padding:8px 14px"' : ""}>${done ? "Otwórz" : "Zaczynamy"} ${I.arrow}</button>
       </div></div>`;
@@ -538,6 +584,70 @@ function renderCost() {
   </section>`;
 }
 
+/* --- Kopie zapasowe (tylko właściciel) --- */
+async function api(path, payload) {
+  const { data } = await sb.auth.getSession();
+  const r = await fetch(path, { method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${data.session?.access_token}` }, body: JSON.stringify(payload) });
+  const out = await r.json().catch(() => ({ error: "Brak odpowiedzi serwera." }));
+  if (!r.ok) throw new Error(out.error || "Coś poszło nie tak.");
+  return out;
+}
+const BK_CONFIRM = "PRZYWRÓĆ";
+const BK_TABLES = [["user_languages", "Języki i poziomy"], ["lessons", "Lekcje"], ["bank", "Słówka"], ["grammar", "Gramatyka"], ["activity", "Filmy"], ["mistakes", "Zapisane błędy"], ["usage", "Wpisy kosztów"]];
+const when = (iso, time = true) => new Date(iso).toLocaleString("pl-PL", { weekday: "long", day: "numeric", month: "long", ...(time ? { hour: "2-digit", minute: "2-digit" } : {}) });
+const kb = b => b >= 1048576 ? `${(b / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1024))} KB`;
+async function loadBackups() {
+  try { const r = await api("/api/backup", { action: "list" }); S.bk = { ...r, loading: false }; }
+  catch (e) { S.bk = { loading: false, error: e.message }; }
+  if (S.view === "backup") render();
+}
+async function runBackup() {
+  try { await api("/api/backup", { action: "run" }); toast("Kopia ruszyła. Będzie na liście za ok. minutę."); const t = setTimeout(() => S.view === "backup" && !S.bk?.pick && loadBackups(), 70000); t?.unref?.(); }
+  catch (e) { toast(e.message); }
+}
+async function previewBackup() {
+  const p = S.bk.pick;
+  try { p.preview = await api("/api/backup", { action: "preview", src: p.src, id: p.id }); }
+  catch (e) { p.error = e.message; }
+  if (S.view === "backup") render();
+}
+async function restoreBackup() {
+  const p = S.bk.pick, typed = ($("#bkConfirm")?.value || "").trim().toUpperCase();
+  if (typed !== BK_CONFIRM) { S.bk.err = `Wpisz ${BK_CONFIRM}, żeby potwierdzić.`; render(); return $("#bkConfirm")?.focus(); }
+  const r = await withBusy("Zapisuję obecny stan i przywracam kopię…", () => api("/api/backup", { action: "restore", src: p.src, id: p.id, confirm: BK_CONFIRM }));
+  if (!r) return;
+  await loadAll(); S.bk = { done: { report: r.report, from: p.preview?.created_at || p.item?.created_at } }; render(); scrollTop();
+}
+function renderBackup() {
+  const b = S.bk || {}, head = `<button class="pillbtn" style="align-self:flex-start" data-act="${b.pick ? "bkCancel" : "tab"}" data-k="me">${b.pick ? "← Lista kopii" : "← O mnie"}</button>`;
+  if (b.done) return `<div class="screen">${head.replace('data-act="tab"', 'data-act="bkDone"').replace("← O mnie", "← Lista kopii")}<h1>Przywrócone</h1>
+    <p>Dane z kopii z ${esc(when(b.done.from))} są z powrotem w aplikacji.</p>
+    <div class="today">${BK_TABLES.filter(([t]) => t in b.done.report).map(([t, l]) => `<div class="trow"><span>${l}</span><b>${b.done.report[t]}</b></div>`).join("")}</div>
+    <p class="small muted">Jeśli to była pomyłka, na liście kopii jest „Stan sprzed przywrócenia”. Przywróć go tak samo.</p></div>`;
+  if (b.pick) {
+    const p = b.pick, pv = p.preview;
+    return `<div class="screen">${head}<h1>Przywrócić kopię?</h1>
+      <p>Kopia z <b>${esc(when(pv?.created_at || p.item?.created_at))}</b>${p.src === "snap" ? ` <span class="muted">(${esc(p.item?.label || "")})</span>` : ""}</p>
+      ${p.error ? `<p class="verdict bad">${esc(p.error)}</p>` : !pv ? `<p class="muted">Sprawdzam, co jest w kopii…</p>` : `
+      <div class="bktable"><div class="bkrow head"><span></span><b>W kopii</b><b>Teraz</b></div>
+        ${BK_TABLES.map(([t, l]) => `<div class="bkrow"><span>${l}</span><b>${pv.backup[t] ?? "–"}</b><b class="${(pv.now[t] ?? 0) > (pv.backup[t] ?? 0) ? "more" : ""}">${pv.now[t] ?? "–"}</b></div>`).join("")}</div>
+      <div class="warnbox"><b>Co się stanie</b><p>Obecne dane w aplikacji zostaną zastąpione danymi z tej kopii. Wszystko, co zrobiłeś po tej dacie, zniknie z aplikacji.</p>
+        <p>Zanim cokolwiek zmienimy, zapiszemy kopię obecnego stanu. Jeśli to pomyłka, przywrócisz ją z listy jako „Stan sprzed przywrócenia”.</p></div>
+      <label class="f">Żeby potwierdzić, wpisz ${BK_CONFIRM}<input class="field" type="text" id="bkConfirm" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="${BK_CONFIRM}"></label>
+      ${b.err ? `<p class="ferr" role="alert">${esc(b.err)}</p>` : ""}
+      <button class="btn btn-danger" data-act="bkRestore">Przywróć dane z ${esc(new Date(pv.created_at).toLocaleDateString("pl-PL", { day: "numeric", month: "long" }))}</button>`}
+      <button class="btn btn-ghost" data-act="bkCancel">Anuluj</button></div>`;
+  }
+  const last = b.last, st = !last ? "" : last.status !== "completed" ? "w trakcie" : last.conclusion === "success" ? "udana" : "nie udała się";
+  return `<div class="screen">${head}<div><h1>Kopie zapasowe</h1><p class="muted">Co niedzielę w nocy GitHub zapisuje zaszyfrowaną kopię całego postępu: poziomy, lekcje, słówka, gramatykę i filmy. Każda kopia jest trzymana 90 dni.</p></div>
+    ${b.loading ? `<p class="muted">Wczytuję listę kopii…</p>` : b.error ? `<div class="warnbox"><b>Kopie nie działają</b><p>${esc(b.error)}</p></div>` : `
+    <section class="sec sec-main">${last ? `<div class="trow"><span>Ostatnia</span><b>${esc(when(last.created_at))} · ${st}</b></div>` : `<p class="muted">Jeszcze nie było żadnej kopii.</p>`}
+      <button class="btn btn-ghost" data-act="bkRun">Zrób kopię teraz</button></section>
+    <section class="sec"><h2>Kopie tygodniowe</h2>${(b.list || []).length ? b.list.map(x => `<div class="bkitem"><div><b>${esc(when(x.created_at, false))}</b><span class="small muted">${kb(x.size)} · zostanie jeszcze ${Math.max(0, Math.round((new Date(x.expires_at) - Date.now()) / 864e5))} dni</span></div><button class="linkbtn" data-act="bkPick" data-k="gh:${x.id}">Przywróć…</button></div>`).join("") : `<p class="muted">Brak kopii. Pierwsza zrobi się w niedzielę albo po „Zrób kopię teraz”.</p>`}</section>
+    ${(b.snaps || []).length ? `<section class="sec"><h2>Stan sprzed przywrócenia</h2>${b.snaps.map(x => `<div class="bkitem"><div><b>${esc(when(x.created_at))}</b><span class="small muted">${esc(x.label)}</span></div><button class="linkbtn" data-act="bkPick" data-k="snap:${x.id}">Przywróć…</button></div>`).join("")}</section>` : ""}`}
+  </div>`;
+}
+
 /* --- Ekran ustawień lektora: jeden dla wszystkich języków --- */
 const SAMPLE = { de: "Hallo! Hast du Lust, am Samstag Fußball zu schauen?", en: "Hi! Do you fancy watching the match on Saturday?", es: "¡Hola! ¿Te apetece ver el partido el sábado?", fr: "Salut ! Ça te dit de regarder le match samedi ?", it: "Ciao! Ti va di guardare la partita sabato?", pl: "Cześć! Masz ochotę obejrzeć mecz w sobotę?" };
 function renderVoice() {
@@ -583,6 +693,8 @@ function renderMe() {
     <button class="chip" data-act="addLang" style="align-self:flex-start">+ Dodaj język</button></section>
   <section class="sec"><div class="row"><span><h2>Lektor</h2><span class="small muted">${S.cloud && !S.cloudOff ? `Google · ${cloudName("f")} i ${cloudName("m")}` : "Głos z telefonu"} · tempo ${Math.round(S.rate * 100)}%</span></span>
     <button class="chip" data-act="openVoice">Ustawienia ›</button></div></section>
+  ${S.owner ? `<section class="sec"><div class="row"><span><h2>Kopie zapasowe</h2><span class="small muted">Co tydzień automatycznie, na GitHubie</span></span>
+    <button class="chip" data-act="openBackup">Otwórz ›</button></div></section>` : ""}
   <section class="sec"><h2>Przypomnienia</h2>
     <div class="row"><span>Codzienne przypomnienie</span><button class="toggle ${P.remind ? "on" : ""}" data-act="remind" aria-label="Przypomnienia" aria-pressed="${P.remind}"></button></div>
     <label class="f">Godzina<input class="field" type="time" id="remAt" value="${esc(P.remind_at)}"></label>
@@ -607,8 +719,9 @@ function renderSheet() {
     ${field("url", `<input class="field" type="url" id="srcUrl" placeholder="https://… link do artykułu">`)}
     ${field("text", `<textarea class="field" id="srcText" style="min-height:80px" placeholder="Wklej tekst z książki, artykułu albo maila"></textarea>`)}
     <p class="small soft-2" style="font-weight:800">2. Ile masz czasu? Stuknij, żeby zacząć.</p>
-    <div class="times">${TIMES.map((t, i) => `<button class="time ${i % 2 ? "tilt-r" : "tilt-l"} ${S.profile._lastTime === t.m ? "sel" : ""}" style="background:${t.bg};color:${t.fg}" data-act="time" data-k="${t.m}"><b>${t.m}<span style="font-size:17px"> min</span></b><small>${t.l}</small></button>`).join("")}</div>
-    <p class="small soft-2">${esc(LANGS[S.sheet].name)} · im więcej czasu, tym dłuższy tekst i więcej mówienia</p>
+    <div class="times">${TIMES.map((t, i) => `<button class="time ${i % 2 ? "tilt-r" : "tilt-l"} ${S.profile._lastTime === t.m ? "sel" : ""}" style="background:${t.bg};color:${t.fg}" data-act="time" data-k="${t.m}"><b>${t.m}<span style="font-size:17px"> min</span></b><small>${t.l}</small>${Prog.forecastShort(S.sheet, t.m) ? `<small class="fc">${Prog.forecastShort(S.sheet, t.m)}</small>` : ""}</button>`).join("")}</div>
+    ${Prog.forecastNote(S.sheet, S.profile._lastTime || 15)}
+    <p class="small soft-2">${esc(LANGS[S.sheet].name)} · im więcej czasu, tym dłuższy tekst i więcej mówienia. Daty to szacunek przy codziennej nauce.</p>
     <button class="btn btn-ghost" style="color:var(--mu)" data-act="closeSheet">Anuluj</button></div></div>`;
 }
 function renderAdd() {
@@ -627,7 +740,18 @@ function progress() {
   const a = L.stage === "review" ? 0 : L.stage === "mat" ? (L.step + 1) / steps : 1;
   const c = L.stage === "act" ? (L.fb ? 1 : 0.4) : L.stage === "sum" ? 1 : 0;
   return `<div class="lbar"><button class="x" data-act="quit" aria-label="Zamknij lekcję">${I.close}</button>
-  <div class="segs" aria-hidden="true"><div class="seg r"><i style="width:${r * 100}%"></i></div><div class="seg a"><i style="width:${a * 100}%"></i></div><div class="seg c"><i style="width:${c * 100}%"></i></div></div></div>`;
+  <div class="segs" aria-hidden="true"><div class="seg r"><i style="width:${r * 100}%"></i></div><div class="seg a"><i style="width:${a * 100}%"></i></div><div class="seg c"><i style="width:${c * 100}%"></i></div></div>${helpKey() ? Learn.helpBtn(helpKey()) : ""}</div>`;
+}
+// Który krok lekcji jest teraz na ekranie (do ściągawki „?”)
+function helpKey() {
+  const L = S.L; if (!L) return null;
+  if (L.stage === "review") return "review";
+  if (L.stage === "act") return "speak";
+  if (L.stage !== "mat") return null;
+  const ms = matSteps(L), isC = L.C.mode === "C";
+  if (L.step === ms.gram) return "grammar";
+  if (L.step === ms.baro) return "baro";
+  return isC ? ["read", "listen"][L.step] || "read" : ["translate", "original", "listen"][L.step] || "original";
 }
 function renderLesson() {
   const L = S.L, cls = lessonBg();
@@ -690,9 +814,9 @@ function renderMat() {
       <div class="tools"><button class="spk" data-act="sayLine" data-k="${i}" aria-label="Odsłuchaj akapit">${I.speaker}</button><button class="spk" data-act="trToggle" data-k="${i}" aria-label="Pokaż tłumaczenie" style="font-size:11px;font-weight:800">PL</button></div></div>`).join("");
   } else {
     body = C.lines.map((ln, i) => `<div class="msg ${ln.me ? "me" : ""} ${L.hl === i ? "hl" : ""}" data-line="${i}"><span class="who">${esc(ln.speaker)}</span>
-      <div class="b"><span>${step === 0 ? `${esc(ln.translation)}${ln.literal ? `<span class="lit">dosłownie: ${esc(ln.literal)}</span>` : ""}` : chunked(ln)}</span>${step > 0 ? `<button class="spk" data-act="sayLine" data-k="${i}" aria-label="Odsłuchaj">${I.speaker}</button>` : ""}</div></div>`).join("");
+      <div class="b"><span>${step === 0 ? `${esc(ln.translation)}${ln.literal ? `<span class="lit">dosłownie: ${esc(ln.literal)}</span>` : ""}` : `${chunked(ln)}${C.mode === "A" && ln.pron ? `<span class="lpron">czytaj: ${esc(ln.pron)}</span>` : ""}`}</span>${step > 0 ? `<button class="spk" data-act="sayLine" data-k="${i}" aria-label="Odsłuchaj">${I.speaker}</button>` : ""}</div></div>`).join("");
   }
-  const tip = L.tip ? `<div class="tip"><b>${esc(L.tip.text)}</b> = ${esc(L.tip.meaning)}${L.tip.how ? `<br><span class="how">${esc(L.tip.how)}</span>` : ""}<br><span class="small">Zapisane w twoim banku</span></div>` : "";
+  const tip = L.tip ? `<div class="tip"><b>${esc(L.tip.text)}</b> = ${esc(L.tip.meaning)}${L.tip.pron ? `<br><span class="tpron">czytaj: ${esc(L.tip.pron)}</span>` : ""}${L.tip.sound ? `<br><span class="how">${esc(L.tip.sound)}</span>` : ""}${L.tip.how ? `<br><span class="how">${esc(L.tip.how)}</span>` : ""}<br><span class="small">Zapisane w twoim banku</span></div>` : "";
   const hint = (isC && step === 0) ? `<p class="small" style="color:var(--mu)">Czytasz od razu oryginał. PL pokazuje tłumaczenie akapitu, gdy utkniesz. Stuknięte słowo trafia do Skarbca.</p>`
     : (!isC && step === 1) ? `<p class="small" style="color:var(--mu)">Stuknij zakreślony zwrot, żeby go zapisać.</p>` : "";
   const listen = ((isC && step === 1) || (!isC && step === 2)) ? `<button class="pillbtn" style="align-self:flex-start" data-act="playAll">${I.speaker} Odtwórz całość</button>` : "";
@@ -727,9 +851,9 @@ function renderAct() {
   return `<div class="screen"><span class="sticker st-coral">Mówienie · ${esc(A.name || "")}</span>
     <h2 style="font-size:28px">${esc(A.task)}</h2>
     ${A.task_native ? `<div class="row" style="justify-content:flex-start;gap:8px"><button class="pillbtn"  data-act="sayTask">${I.speaker} Odsłuchaj</button><button class="pillbtn" data-act="taskPl">${L.taskPl ? "Ukryj PL" : "PL"}</button></div>${L.taskPl ? `<p class="small">${esc(A.task_native)}</p>` : ""}` : ""}
-    ${(A.chunks || []).length ? `<div class="chips">${A.chunks.map(c => `<span class="chip sel">${esc(c)}</span>`).join("")}</div>` : ""}
+    ${(A.chunks || []).length ? `<div class="achunks">${A.chunks.map((c, i) => { const pr = (A.chunks_pron || [])[i], open = L.C.mode === "A" || L.showPron?.[i]; return `<div class="achunk"><b>${esc(c)}</b>${pr ? (open ? `<span class="tpron">czytaj: ${esc(pr)}</span>` : `<button class="linkbtn" data-act="showPron" data-k="${i}">jak to przeczytać?</button>`) : ""}</div>`; }).join("")}</div>` : ""}
     ${A.hint ? `<p class="small muted">${esc(A.hint)}</p>` : ""}${roundInfo}
-    <div class="answer"><textarea class="field" id="act" placeholder="Napisz albo podyktuj…"></textarea><button class="mic" data-act="mic" data-k="act" aria-label="Odpowiedz głosem">${I.mic}</button></div></div>
+    <div class="answer"><textarea class="field" id="act" placeholder="Napisz albo podyktuj…">${esc(L.draft || "")}</textarea><button class="mic" data-act="mic" data-k="act" aria-label="Odpowiedz głosem">${I.mic}</button></div></div>
     <div class="footer twobtn">${r === 0 ? backBtn("actBack", "var(--ink)") : ""}<button class="btn btn-sun" data-act="actSend">${isC && r < 2 ? `Gotowe, runda ${r + 2}` : "Sprawdź z Claude"}</button></div>`;
 }
 // Przejrzysta informacja o poziomie: ile punktów i dlaczego
@@ -754,6 +878,7 @@ function renderSum() {
     <div class="wstats sumstats"><div><b>${L.added.length}</b><span>nowe zwroty</span></div>${L.first ? "" : `<div><b>${L.ok}/${L.total}</b><span>powtórki dobrze</span></div>`}<div><b>1</b><span>zadanie z mówienia</span></div></div>
     ${levelLine(L)}
     <p class="muted">Jutro czeka <b style="color:var(--g)">${due}</b> zwrotów do powtórki</p>
+    ${Prog.afterLesson(L.lang)}
     <div class="card" style="position:relative;border:0">
       <label class="f" >Co poprawić w następnej lekcji? (opcjonalnie)<textarea class="field" id="nextNote" placeholder="np. kwestie się nie łączyły, brzmiało sztucznie, za łatwe słownictwo">${esc(L.note || "")}</textarea></label>
       ${L.noteSaved ? `<p class="small" style="font-weight:700">Zapisane. Claude weźmie to pod uwagę od następnej lekcji.</p>` : `<button class="btn btn-ghost"  data-act="saveNote">Wyślij uwagę do Claude'a</button>`}
@@ -782,6 +907,7 @@ function afterRender() {
     if (g === "f") { S.voice[k] = sel.value; saveLocal("staysiVoices", S.voice); }
     speak(LANGS[k].hi, k, null, voicesFor(k).find(v => v.voiceURI === sel.value));
   }));
+  const ta = $("#act"); if (ta && S.L) ta.addEventListener("input", () => { S.L.draft = ta.value; saveLesson(); });
   const rt = $("#rate"); if (rt) rt.addEventListener("input", () => { S.rate = +rt.value; $("#rateVal").textContent = Math.round(S.rate * 100) + "%"; saveLocal("staysiRate", S.rate); });
   const pg = $("#pages"); if (pg) pg.addEventListener("change", () => onPhoto(pg.files[0]));
   Words.afterRender();
@@ -800,10 +926,10 @@ document.addEventListener("keydown", e => {
 });
 
 /* Systemowy gest "wstecz" (Android, przeglądarka): cofa o jeden ekran zamiast zamykać aplikację */
-const MAIN_TABS = ["bank", "cost", "me"];
+const MAIN_TABS = ["bank", "cal", "cost", "me"];
 function canGoBack() {
   if (S.busy) return true;
-  if (S.sheet || S.add) return true;
+  if (S.sheet || S.add || S.vid || S.help) return true;
   if (["loading", "setup", "auth", "home"].includes(S.view)) return false;
   if (S.view === "ob") return S.ob.step >= 1 && S.ob.step <= 8;
   if (S.view === "placement") return !!S.pl && S.pl.step !== "result";
@@ -814,8 +940,11 @@ function goBack() {
   if (S.busy) return true;
   if (S.sheet) { S.sheet = null; render(); return true; }
   if (S.add) { S.add = null; render(); return true; }
+  if (S.vid) { S.vid = null; render(); return true; }
+  if (S.help) { S.help = null; render(); return true; }
   const v = S.view, L = S.L;
   if (v === "voice") { S.view = "me"; render(); scrollTop(); return true; }
+  if (v === "backup") { if (S.bk?.pick) act("bkCancel"); else { S.view = "me"; render(); scrollTop(); } return true; }
   if (v === "lang" || MAIN_TABS.includes(v)) { S.view = "home"; render(); scrollTop(); return true; }
   if (["wlist", "grammar", "guide"].includes(v)) { act(v === "wlist" ? "wBack" : "toLang"); return true; }
   if (v === "words") { act(S.W?.intro > 0 ? "wIntroBack" : "wQuit"); return true; }
@@ -868,6 +997,7 @@ async function finishPlacement(score, reason) {
 
 async function act(a, k, el) {
   const L = S.L, P = S.profile;
+  if (/^(vid|cal)[A-Z]/.test(a)) { if (await Prog.act(a, k)) return; }
   if (/^w[A-Z]/.test(a) || a === "openLang") { if (await Words.act(a, k)) return; }
   if (["toLang", "openGrammar", "openGuide", "gToggle"].includes(a)) { if (await Learn.act(a, k)) return; }
   switch (a) {
@@ -923,6 +1053,12 @@ async function act(a, k, el) {
       toast("Zapisano."); return render();
     }
     case "openVoice": S.view = "voice"; render(); return scrollTop();
+    case "openBackup": if (!S.owner) return; S.view = "backup"; S.bk = { loading: true }; render(); scrollTop(); return loadBackups();
+    case "bkRun": return runBackup();
+    case "bkPick": { const [src, id] = k.split(":"); S.bk.pick = { src, id, item: (src === "snap" ? S.bk.snaps : S.bk.list).find(x => String(x.id) === id) }; S.bk.err = ""; render(); scrollTop(); return previewBackup(); }
+    case "bkCancel": S.bk.pick = null; S.bk.err = ""; render(); return scrollTop();
+    case "bkRestore": return restoreBackup();
+    case "bkDone": S.bk = { loading: true }; render(); return loadBackups();
     case "voiceLang": S.voiceLang = k; return render();
     case "pickVoice": {
       const [g, v] = k.split(":"); S.cloudVoice[g] = v; saveLocal("staysiCloudVoice", S.cloudVoice);
@@ -934,7 +1070,12 @@ async function act(a, k, el) {
     case "logout": await sb.auth.signOut(); return;
 
     /* lekcja */
-    case "quit": stopSpeech(); S.langView = L?.lang || S.langView; S.L = null; S.view = S.langView ? "lang" : "home"; toast("Lekcja przerwana. Zapisane zwroty zostają w banku."); render(); return scrollTop();
+    case "quit": stopSpeech(); saveLesson(); S.langView = L?.lang || S.langView; S.L = null; S.view = S.langView ? "lang" : "home"; toast("Lekcja zapisana. Dokończysz ją z ekranu języka."); render(); return scrollTop();
+    case "resume": return resumeLesson(k);
+    case "help": S.help = k; return render();
+    case "showPron": (L.showPron = L.showPron || {})[k] = true; return render();
+    case "helpClose": S.help = null; return render();
+    case "dropPending": { const p = pendingLesson(k); dropLesson(k, p?.id); toast("Niedokończona lekcja usunięta."); return render(); }
     case "saveNote": {
       const t = ($("#nextNote")?.value || "").trim(); if (!t) return toast("Wpisz, co poprawić.");
       const all = ((S.profile.style_notes || "") + `\n• ${t}`).trim().slice(-1500);
@@ -1061,6 +1202,7 @@ async function startLesson(lang, minutes) {
       !first ? sb.from("lessons").select("content").eq("lang", lang).not("completed_at", "is", null).order("created_at", { ascending: false }).limit(1) : Promise.resolve({ data: [] })
     ]);
     const cards = (review.cards || []).filter(c => c.answer && c.prompt_native);
+    const old = pendingLesson(lang); if (old) dropLesson(lang, old.id);
     S.L = { lang, minutes, id: lesson.lesson_id, C: lesson.content, first, prev: prev.data?.[0]?.content || null,
       stage: first || !cards.length ? "mat" : "review", introSeen: false, i: 0, cards, retry: [], ok: 0, total: 0, cardFb: null,
       step: 0, hl: -1, tip: null, added: [], showTr: {}, rounds: [], fb: null };
@@ -1095,6 +1237,7 @@ async function checkCard() {
 async function sendActivation() {
   const L = S.L, isC = L.C.mode === "C", t = $("#act").value.trim();
   if (!t) return toast("Napisz albo podyktuj odpowiedź.");
+  L.draft = "";
   if (isC && L.rounds.length < 2) { L.rounds.push(t); render(); return scrollTop(); }
   if (isC) L.rounds.push(t); else L.answer = t;
   const r = await withBusy("Claude czyta twoją odpowiedź…", () => ai("feedback", { lang: L.lang, task: L.C.activation?.task || "", ...(isC ? { rounds: L.rounds } : { answer: t }) }));
@@ -1135,9 +1278,12 @@ async function finishLesson() {
     ul.score = score; ul.lessons_done = (ul.lessons_done || 0) + 1;
     await Promise.all([
       sb.from("user_languages").update({ score, lessons_done: ul.lessons_done }).eq("id", ul.id),
-      sb.from("lessons").update({ completed_at: new Date().toISOString(), barometer: L.baro || null }).eq("id", L.id)
+      sb.from("lessons").update({ completed_at: new Date().toISOString(), barometer: L.baro || null, state: null, score }).eq("id", L.id)
+        .then(r => r?.error && /state|score/.test(r.error.message || "") ? sb.from("lessons").update({ completed_at: new Date().toISOString(), barometer: L.baro || null }).eq("id", L.id) : r)
     ]);
     (S.doneDays[day(0)] = S.doneDays[day(0)] || new Set()).add(L.lang);
+    dropLesson(L.lang, null);
+    (S.done = S.done || []).unshift({ id: L.id, lang: L.lang, d: day(0), at: Date.now(), minutes: L.minutes || 0, score });
     if (band(score)[0] !== before) toast(ul.lessons_done <= 5 ? `Dopasowaliśmy twój poziom: ${band(score)[0]}.` : `Awans! Twój poziom to teraz ${band(score)[0]}.`);
     L.stage = "sum";
   });

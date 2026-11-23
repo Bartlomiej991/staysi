@@ -26,6 +26,13 @@ before(async () => {
   server = http.createServer((req, res) => {
     const url = new URL(req.url, "http://x");
     if (url.pathname === "/api/config") { res.setHeader("content-type", "application/json"); return res.end(JSON.stringify({ supabaseUrl: "x", supabaseAnonKey: "y", cloudVoice: !!process.env.UI_CLOUD })); }
+    if (url.pathname === "/api/backup") {
+      let b = ""; req.on("data", c => (b += c)); req.on("end", () => { const a = JSON.parse(b || "{}").action;
+      const out = a === "list" ? { list: [{ id: 77, name: "staysi-kopia-2026-11-22", size: 420000, created_at: "2026-11-22T02:17:00Z", expires_at: new Date(Date.now() + 80 * 864e5).toISOString() }, { id: 76, name: "staysi-kopia-2026-11-15", size: 401000, created_at: "2026-11-15T02:17:00Z", expires_at: new Date(Date.now() + 73 * 864e5).toISOString() }], snaps: [], last: { status: "completed", conclusion: "success", created_at: "2026-11-22T02:17:00Z" } }
+        : a === "preview" ? { created_at: "2026-11-22T02:17:00Z", backup: { user_languages: 1, lessons: 14, bank: 120, grammar: 9, activity: 6 }, now: { user_languages: 1, lessons: 15, bank: 131, grammar: 9, activity: 7 } } : { ok: true };
+      res.setHeader("content-type", "application/json"); res.end(JSON.stringify(out)); });
+      return;
+    }
     if (url.pathname === "/api/ai") {
       let body = ""; req.on("data", c => (body += c)); req.on("end", () => { const b = JSON.parse(body); res.setHeader("content-type", "application/json"); res.end(JSON.stringify(fakeAnswer(b.action, b))); });
       return;
@@ -102,6 +109,7 @@ test("wygląd: start, ekran języka, wybór lekcji", { skip }, async () => {
 test("wygląd: lekcja od początku do końca", { skip }, async () => {
   await click('[data-act="start"][data-k="de"]'); await click('[data-act="time"][data-k="15"]', 500);
   await check("lekcja-tlumaczenie"); await click('[data-act="matNext"]');
+  await click('[data-act="help"]', 150); await check("lekcja-sciagawka"); await click('.helppop [data-act="helpClose"]');
   await click('[data-act="chunk"]', 200); await check("lekcja-oryginal-zwrot");
   await click('[data-act="matNext"]'); await check("lekcja-sluchanie");
   // podczas "Odtwórz całość" ekran przewija się za czytaną kwestią i nie skacze na górę
@@ -118,7 +126,14 @@ test("wygląd: lekcja od początku do końca", { skip }, async () => {
   await fill("#act", "Am Wochenende möchte ich gern schwimmen."); await click('[data-act="actSend"]', 400); await check("lekcja-poprawka");
   await fill("#clarify", "chodziło mi o pływanie"); await click('[data-act="clarify"]', 400); await check("lekcja-doprecyzowanie");
   await click('[data-act="finish"]', 500); await check("lekcja-koniec");
-  await click('[data-act="lessonDone"]', 200);
+  await page.evaluate(() => { const sc = document.querySelector(".screen"); sc.scrollTop = sc.scrollHeight; }); await check("lekcja-koniec-film");
+  await click('.sec [data-act="vidOpen"]', 200); await check("film-arkusz");
+  await click('[data-act="vidMin"][data-k="20"]'); await fill("#vidTitle", "Easy German"); await click('[data-act="vidSave"]', 300);
+  await click('[data-act="lessonDone"]', 200); await check("ekran-jezyka-po-lekcji");
+  // przerwana lekcja: ✕ zapisuje, „Dokończ lekcję” wraca w to samo miejsce
+  await click('[data-act="start"][data-k="de"]'); await click('[data-act="time"][data-k="10"]', 500); await check("wybor-czasu-prognoza-druga");
+  await click('[data-act="quit"]', 200); await check("niedokonczona-lekcja");
+  await click('[data-act="resume"][data-k="de"]', 200); await click('[data-act="quit"]', 200); await click('[data-act="dropPending"][data-k="de"]', 200);
 });
 
 test("wygląd: bank słówek, gramatyka, przewodnik, zakładki", { skip }, async () => {
@@ -133,9 +148,14 @@ test("wygląd: bank słówek, gramatyka, przewodnik, zakładki", { skip }, async
   await click('[data-act="openGrammar"]'); await click('[data-act="gToggle"]'); await check("moja-gramatyka");
   await click('[data-act="toLang"]'); await click('[data-act="openGuide"]'); await check("przewodnik");
   await click('[data-act="toLang"]'); await click('[data-act="tab"][data-k="home"]');
-  for (const t of ["bank", "cost", "me"]) { await click(`[data-act="tab"][data-k="${t}"]`, 200); await check(`zakladka-${t}`); }
+  for (const t of ["bank", "cal", "cost", "me"]) { await click(`[data-act="tab"][data-k="${t}"]`, 200); await check(`zakladka-${t}`); }
+  await click('[data-act="tab"][data-k="cal"]', 200); await click('.cday.now', 150);
+  await page.evaluate(() => document.querySelector(".screen").scrollBy(0, 600)); await page.waitForTimeout(80); await check("kalendarz-podsumowanie");
+  await click('[data-act="tab"][data-k="me"]', 200);
   // O mnie jest długie: zrzuty niżej, po przewinięciu
   for (const n of [1, 2]) { await page.evaluate(() => document.querySelector(".screen").scrollBy(0, 700)); await page.waitForTimeout(80); await check(`zakladka-me-${n}`); }
   await click('[data-act="openVoice"]', 200); await check("lektor");
+  await click('[data-act="tab"][data-k="me"]', 200); await click('[data-act="openBackup"]', 300); await check("kopie");
+  await click('[data-act="bkPick"]', 300); await click('[data-act="bkRestore"]', 150); await check("kopie-potwierdzenie");
   assert.deepEqual(errors, [], "błędy JavaScript na stronie");
 });

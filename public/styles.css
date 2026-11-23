@@ -486,3 +486,66 @@ label.f,.flabel{font-size:15px;font-weight:600;color:var(--tx);margin:0 0 8px}
 .toggle{background:var(--ln2);border:0}
 .toggle.on{background:var(--g)} .toggle.on::after{background:var(--g-on)}
 .btn-ghost,.pillbtn,.backbtn{border:1.5px solid var(--ln2)}
+
+/* --- Dzień w kafelku języka, filmy, kalendarz, prognoza --- */
+.today{display:flex;flex-direction:column;gap:2px;padding:6px 0 2px}
+.trow{display:flex;align-items:baseline;gap:10px;padding:7px 0;border-bottom:1px solid var(--ln)}
+.trow:last-child{border-bottom:0}
+.trow>span{color:var(--mu);min-width:72px;font-size:15px}
+.trow>b{flex:1;font-weight:600;font-size:15px}
+.trow .linkbtn{font-size:15px;font-weight:700;padding:0}
+.linkbtn{background:none;border:0;color:var(--g);font-weight:700;padding:4px 0;cursor:pointer;text-decoration:none;font-size:15px}
+.sec-main .row .linkbtn{font-size:15px}
+.mins,.segs,.chlinks{display:flex;flex-wrap:wrap;gap:8px}
+.chlinks .chip{text-decoration:none;font-size:14px}
+ul.tips{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px;font-size:15px;line-height:1.5}
+ul.tips li::marker{color:var(--g)}
+.vhelp{border-top:1px solid var(--ln);padding-top:12px}
+.vlist{display:flex;flex-direction:column;gap:6px}
+.time .fc{display:block;margin-top:4px;color:var(--g);font-weight:700;font-size:12px;opacity:1}
+.fnote{display:flex;flex-direction:column;gap:4px;border-left:2px solid var(--g);padding:2px 0 2px 12px}
+.fnote b{color:var(--g)}
+/* kalendarz */
+.cal{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px}
+.cdow{font-size:12px;color:var(--mu);text-align:center;font-weight:700}
+.cday{aspect-ratio:1;border-radius:9px;border:0;font-size:13px;font-weight:700;color:var(--tx);display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;font-family:inherit}
+.cday.h0{background:#1C2E25;color:#7F9387}
+.cday.h1{background:#24513A}
+.cday.h2{background:#2F7350}
+.cday.h3{background:#3FA36C;color:#0F1A14}
+.cday.h4{background:var(--g);color:#0F1A14}
+.cday.hx{background:transparent;color:#4A5E52;cursor:default}
+.cday.now{outline:2px solid var(--honey);outline-offset:1px}
+.cday.sel{outline:2px solid var(--tx);outline-offset:1px}
+.clegend{display:flex;align-items:center;gap:5px;margin-top:10px;flex-wrap:wrap}
+.clegend i.cday{width:16px;height:16px;aspect-ratio:auto;border-radius:4px;cursor:default}
+.cdet{display:flex;flex-direction:column;gap:2px;margin-top:10px;border-left:2px solid var(--g);padding-left:12px}
+.cdet>b{text-transform:none;margin-bottom:4px}
+.nav button{font-size:11px}
+/* ściągawka „?” */
+.helpbtn{width:34px;height:34px;flex:0 0 34px;border-radius:50%;border:1.5px solid var(--ln2);background:transparent;color:var(--g);font-weight:800;font-size:17px;font-family:inherit;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0}
+.lbar{gap:12px}
+.overlay.clear{background:rgba(5,10,7,.35);align-items:flex-start;justify-content:flex-end}
+.helppop{margin:64px 12px 0 auto;width:min(340px,calc(100vw - 24px));background:var(--bg-2);border:1.5px solid var(--ln2);border-radius:18px;padding:16px 16px 18px;display:flex;flex-direction:column;gap:10px;color:var(--tx);box-shadow:0 12px 32px rgba(0,0,0,.35)}
+.helppop .row b{font-size:16px}
+.helppop .x{width:30px;height:30px}
+/* wymowa w lekcji */
+.lpron,.tpron{display:block;margin-top:4px;font-size:14px;color:var(--honey);font-weight:600;letter-spacing:.01em}
+.achunks{display:flex;flex-direction:column;gap:2px}
+.achunk{display:flex;flex-direction:column;padding:8px 0 8px 12px;border-left:2px solid var(--g)}
+.achunk b{font-size:17px}
+.achunk .linkbtn{align-self:flex-start;font-size:14px;padding:2px 0}
+/* kopie zapasowe */
+.bkitem{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 0;border-bottom:1px solid var(--ln)}
+.bkitem:last-child{border-bottom:0}
+.bkitem>div{display:flex;flex-direction:column;gap:2px}
+.bkitem b{font-weight:600;font-size:16px}
+.bktable{display:flex;flex-direction:column}
+.bkrow{display:grid;grid-template-columns:1fr 72px 72px;gap:8px;padding:8px 0;border-bottom:1px solid var(--ln);font-size:15px}
+.bkrow b{text-align:right;font-weight:600}
+.bkrow.head b{color:var(--mu);font-size:13px}
+.bkrow b.more{color:var(--honey)}
+.warnbox{border-left:3px solid var(--bad);padding:4px 0 4px 14px;display:flex;flex-direction:column;gap:6px;font-size:15px}
+.warnbox b{color:var(--bad)}
+.ferr{color:var(--bad);font-size:14px;font-weight:600;margin-top:-6px}
+.btn-danger{background:var(--bad);color:#2A0F08;border:0}
